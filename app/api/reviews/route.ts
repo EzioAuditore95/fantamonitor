@@ -1,10 +1,11 @@
-import { getChatGPTUser } from '@/app/chatgpt-auth';
+import { getAppUser } from '@/app/auth';
 import { saveReview, ReviewConflict } from '@/lib/reviews';
 import { ZodError } from 'zod';
 const headers={'Cache-Control':'private, no-store'};
 export async function POST(request:Request){
-  const user=await getChatGPTUser();
+  const user=await getAppUser();
   if(!user)return Response.json({error:'Accesso richiesto.'},{status:401,headers});
+  if(user.role!=='admin')return Response.json({error:'Operazione riservata all’amministratore.'},{status:403,headers});
   if(request.headers.get('origin')!==new URL(request.url).origin)return Response.json({error:'Origine non autorizzata.'},{status:403,headers});
   if(!request.headers.get('content-type')?.startsWith('application/json'))return Response.json({error:'Formato JSON richiesto.'},{status:415,headers});
   try{

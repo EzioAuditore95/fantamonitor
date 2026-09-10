@@ -22,7 +22,7 @@ export const snapshotSchema = z.object({
   if(Date.parse(s.observed_at)>Date.now()+60000)bad('La lettura ha una data futura.');
 });
 export type Snapshot=z.infer<typeof snapshotSchema>;
-export type Archive={reviews:Review[];snapshots:Snapshot[]; events:{team_key:string;round:number;source_label:string;source_time_text:string;source_url:string}[]};
+export type Archive={canManage?:boolean;reviews:Review[];snapshots:Snapshot[]; events:{team_key:string;round:number;source_label:string;source_time_text:string;source_url:string}[]};
 export function normalize(s:Snapshot):Snapshot{return {...s,observed_at:new Date(s.observed_at).toISOString(),teams:[...s.teams].sort((a,b)=>a.team_key.localeCompare(b.team_key))};}
 export function canonical(value:unknown):string {
   if(Array.isArray(value))return '['+value.map(canonical).join(',')+']';
