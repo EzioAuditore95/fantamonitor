@@ -1,0 +1,74 @@
+{
+  "competition_id": "337500",
+  "expected_total": 10,
+  "inserted": 5,
+  "league": "chefantavitae10",
+  "observed_at": "2026-09-09T20:46:00Z",
+  "round": 1,
+  "schema_version": 1,
+  "season": "2026-2027",
+  "source": "authenticated_ui",
+  "source_url": "https://leghe.fantacalcio.it/chefantavitae10/view/competition/337500/manage-lineups/1?team=12420064",
+  "teams": [
+    {
+      "name": "AC Idovalproico",
+      "present": false,
+      "source_status": "Non inserita",
+      "team_key": "AC Idovalproico"
+    },
+    {
+      "name": "Atletico Fontanelle",
+      "present": false,
+      "source_status": "Non inserita",
+      "team_key": "Atletico Fontanelle"
+    },
+    {
+      "name": "FC LBVLA",
+      "present": false,
+      "source_status": "Non inserita",
+      "team_key": "FC LBVLA"
+    },
+    {
+      "name": "FC SEMINI",
+      "present": false,
+      "source_status": "Non inserita",
+      "team_key": "FC SEMINI"
+    },
+    {
+      "name": "FC Villaggio Mau Mau",
+      "present": false,
+      "source_status": "Non inserita",
+      "team_key": "FC Villaggio Mau Mau"
+    },
+    {
+      "name": "FDS Sballo",
+      "present": true,
+      "source_status": "check-circle",
+      "team_key": "FDS Sballo"
+    },
+    {
+      "name": "I PIPPISTRELLI",
+      "present": true,
+      "source_status": "check-circle",
+      "team_key": "I PIPPISTRELLI"
+    },
+    {
+      "name": "Pro Spritz",
+      "present": true,
+      "source_status": "check-circle",
+      "team_key": "Pro Spritz"
+    },
+    {
+      "name": "Real Hasbulla",
+      "present": true,
+      "source_status": "check-circle",
+      "team_key": "Real Hasbulla"
+    },
+    {
+      "name": "Salamandre",
+      "present": true,
+      "source_status": "check-circle",
+      "team_key": "Salamandre"
+    }
+  ]
+}
