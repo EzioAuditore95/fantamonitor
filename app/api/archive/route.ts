@@ -1,10 +1,11 @@
 import { getChatGPTUser } from '@/app/chatgpt-auth';
 import { listSnapshots,importSnapshots,initialArchive } from '@/lib/archive';
 import { ZodError } from 'zod';
+import { listReviews } from '@/lib/reviews';
 const headers={'Cache-Control':'private, no-store'};
 export async function GET(){
   if(!await getChatGPTUser())return Response.json({error:'Accesso richiesto.'},{status:401,headers});
-  try{return Response.json({snapshots:await listSnapshots(),events:initialArchive().events},{headers});}
+  try{return Response.json({snapshots:await listSnapshots(),reviews:await listReviews(),events:initialArchive().events},{headers});}
   catch(e){console.error('archive_read_failed',e instanceof Error?e.message:'unknown');return Response.json({error:'Archivio non disponibile. Riprova tra poco.'},{status:503,headers});}
 }
 export async function POST(request:Request){

@@ -1,0 +1,56 @@
+'use client';
+import { useState } from 'react';
+import { Coins, FileCheck2, History, ChevronRight, Info } from 'lucide-react';
+import { Tabs,TabsList,TabsTrigger } from '@/components/ui/tabs';
+import { Select,SelectContent,SelectItem,SelectTrigger,SelectValue } from '@/components/ui/select';
+import { Table,TableBody,TableCell,TableHead,TableHeader,TableRow } from '@/components/ui/table';
+import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from '@/components/ui/dialog';
+import { Sheet,SheetContent,SheetDescription,SheetHeader,SheetTitle } from '@/components/ui/sheet';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { TEAM_NAMES,displayDate,type Archive } from '@/lib/model';
+import { balances,latestReviews,reviewKey,HALF_LABEL,HALVES,halfForRound,serieARound,euro,type Period,type Review,type ReviewInput } from '@/lib/penalties';
+
+const statusLabel={delivered:'Consegnata entro il termine',missed:'Non consegnata entro il termine',unverified:'Da verificare'};
+const sourceFor=(round:number)=>`https://leghe.fantacalcio.it/chefantavitae10/view/competition/337500/manage-lineups/${round}`;
+function localDate(value:string|null){if(!value)return '';const d=new Date(value);return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);}
+export function PenaltySummary({data,round,onOpen}:{data:Archive|null;round:number;onOpen:()=>void}){
+  const half=halfForRound(round),rows=balances(TEAM_NAMES,half,data?.reviews??[]);
+  return <button className="penalty-summary" onClick={onOpen}><Coins size={22}/><span><strong>Gettoni e penalità · {HALF_LABEL[half]}</strong><span>{data?`${rows.reduce((n,r)=>n+r.used,0)} gettoni utilizzati · ${euro(rows.reduce((n,r)=>n+r.penalty,0))} di penalità registrate`:'Caricamento registro…'}</span></span><ChevronRight size={20}/></button>;
+}
+export default function PenaltiesPanel({data,round,onSaved}:{data:Archive|null;round:number;onSaved:()=>Promise<void>}){
+  const [period,setPeriod]=useState<Period>(halfForRound(round)),[detail,setDetail]=useState<string|null>(null);
+  const [open,setOpen]=useState(false),[saving,setSaving]=useState(false),[error,setError]=useState('');
+  const [team,setTeam]=useState(TEAM_NAMES[0]),[selectedRound,setSelectedRound]=useState(round);
+  const [status,setStatus]=useState<ReviewInput['status']>('unverified'),[deadline,setDeadline]=useState(''),[note,setNote]=useState(''),[source,setSource]=useState(sourceFor(round)),[revision,setRevision]=useState(0);
+  const reviews=data?.reviews??[],latest=latestReviews(reviews),rows=balances(TEAM_NAMES,period,reviews);
+  const sum=(key:'penalty'|'missed'|'used'|'verified'|'total')=>rows.reduce((n,r)=>n+r[key],0);
+  const teamRow=rows.find(r=>r.team===detail);
+  const selectedHalves=period==='complessivo'?HALVES:[period];
+  function fill(name:string,day:number){
+    const r=latest.get(reviewKey(name,day));setTeam(name);setSelectedRound(day);setStatus(r?.status??'unverified');
+    setDeadline(localDate(r?.deadline??null));setNote(r?.note??'');setSource(r?.source_url??sourceFor(day));setRevision(r?.revision??0);setError('');
+  }
+  function edit(name:string,day:number){fill(name,day);setDetail(null);setOpen(true);}
+  async function save(){
+    setSaving(true);setError('');
+    try{
+      const response=await fetch('/api/reviews',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({team,round:selectedRound,status,deadline:deadline?new Date(deadline).toISOString():null,note,source_url:source,expected_revision:revision})});
+      const result=await response.json() as {error?:string};if(!response.ok)throw new Error(result.error??'Salvataggio non riuscito.');
+      await onSaved();setOpen(false);
+    }catch(e){setError(e instanceof Error?e.message:'Salvataggio non riuscito.');}finally{setSaving(false);}
+  }
+  return <>
+    <div className="page-heading"><div><div className="eyebrow">Regolamento della lega</div><h1>Gettoni e penalità</h1><p className="sync-note">Prima assenza gratuita per girone. Dalla seconda: 5 € per ogni mancata consegna.</p></div><button className="btn primary" disabled={!data} onClick={()=>edit(TEAM_NAMES[0],round)}><FileCheck2/>Verifica una giornata</button></div>
+    <Tabs value={period} onValueChange={v=>setPeriod(v as Period)}><TabsList className="period-tabs" aria-label="Girone del riepilogo"><TabsTrigger value="andata">Andata</TabsTrigger><TabsTrigger value="ritorno">Ritorno</TabsTrigger><TabsTrigger value="complessivo">Complessivo</TabsTrigger></TabsList></Tabs>
+    <p className="period-description">{period==='andata'?'Serie A 1–19 · La lega parte dalla 4ª: giornate di lega 1–16.':period==='ritorno'?'Serie A 20–38 · Giornate di lega 17–35.':'Intera stagione · Un gettone per girone, senza trasferimento tra andata e ritorno.'}</p>
+    {!data?<section className="panel blank-panel">Registro non ancora disponibile.</section>:<>
+      <div className="penalty-metrics"><div className="panel number-card"><strong>{sum('used')}</strong><span>Gettoni utilizzati / {period==='complessivo'?20:10}</span></div><div className="panel number-card"><strong>{sum('missed')}</strong><span>Mancate consegne verificate</span></div><div className="panel number-card"><strong>{euro(sum('penalty'))}</strong><span>Penalità maturate</span></div></div>
+      <div className="coverage-note"><Info size={18}/><p><strong>{sum('verified')} esiti verificati su {sum('total')} squadra-giornate del periodo.</strong> I totali si basano sul registro verificato; le giornate senza esito, incluse quelle future, non consumano gettoni. La sincronizzazione automatica non è attiva.</p></div>
+      <section className="panel"><div className="panel-head"><h2>Situazione per squadra</h2><small>Gettoni residui sul registro</small></div><Table className="penalty-table"><TableHeader><TableRow><TableHead>Squadra</TableHead>{selectedHalves.map(h=><TableHead key={h}>Gettone {HALF_LABEL[h].toLowerCase()}</TableHead>)}<TableHead>Assenze</TableHead><TableHead>Penalità</TableHead><TableHead>Esiti verificati</TableHead><TableHead><span className="sr-only">Dettagli</span></TableHead></TableRow></TableHeader><TableBody>{rows.map(r=><TableRow key={r.team}><TableCell className="penalty-team"><button onClick={()=>setDetail(r.team)}>{r.team}</button></TableCell>{selectedHalves.map(h=><TableCell data-label={`Gettone ${HALF_LABEL[h].toLowerCase()}`} key={h}><span className={'badge '+(r[h].remaining?'present':'unknown')}>{r[h].remaining?'1 residuo':'Utilizzato'}</span></TableCell>)}<TableCell data-label="Assenze">{r.missed}</TableCell><TableCell data-label="Penalità"><strong className={r.penalty?'amount-due':''}>{euro(r.penalty)}</strong></TableCell><TableCell data-label="Esiti verificati">{r.verified} / {r.total}</TableCell><TableCell className="penalty-action"><button className="detail-button" onClick={()=>setDetail(r.team)} aria-label={`Dettaglio gettoni e penalità ${r.team}`}>Dettaglio<ChevronRight size={16}/></button></TableCell></TableRow>)}</TableBody></Table></section>
+      <p className="footnote">Il primo gettone copre l’assenza cronologicamente più antica del girone. Una correzione aggiorna automaticamente tutti gli importi. Le penalità indicate non rappresentano pagamenti effettuati.</p>
+    </>}
+    <Sheet open={!!detail} onOpenChange={v=>{if(!v)setDetail(null)}}><SheetContent className="drawer"><SheetHeader className="p-0"><SheetTitle>{detail}</SheetTitle><SheetDescription>Gettoni, penalità e registro delle verifiche.</SheetDescription></SheetHeader>{teamRow&&<><div className="team-penalty-total"><span>Penalità · {period}</span><strong>{euro(teamRow.penalty)}</strong></div>{selectedHalves.map(h=><section key={h}><h3>{HALF_LABEL[h]} · {teamRow[h].remaining?'1 GETTONE RESIDUO':'GETTONE UTILIZZATO'}</h3>{!teamRow[h].entries.length?<p className="muted">Nessuna mancata consegna verificata.</p>:teamRow[h].entries.map(e=><div className="timeline-row" key={e.id}><div><strong>Giornata {e.round} · Serie A {serieARound(e.round)}</strong><p>{e.token?'Gettone gratuito utilizzato':'Mancata consegna successiva'}</p><button className="detail-button" onClick={()=>edit(e.team,e.round)}>Rivedi esito</button></div><strong>{euro(e.charge)}</strong></div>)}</section>)}<button className="btn primary" onClick={()=>edit(teamRow.team,round)}><FileCheck2/>Verifica una giornata</button><h3><History size={16}/> STORICO DELLE VERIFICHE</h3>{reviews.filter(r=>r.team===detail&&(period==='complessivo'||halfForRound(r.round)===period)).slice().reverse().map(r=><div className="event-box review-event" key={r.id}><strong>Giornata {r.round} · {statusLabel[r.status]}</strong><p>{displayDate(r.recorded_at)} · revisione {r.revision}{latest.get(reviewKey(r.team,r.round))?.id!==r.id?' · superata':''}</p><p>{r.note}</p><p>Scadenza: {r.deadline?displayDate(r.deadline):'non registrata'}</p><a href={r.source_url} target="_blank" rel="noreferrer">Consulta la fonte</a></div>)}</>}</SheetContent></Sheet>
+    <Dialog open={open} onOpenChange={v=>{if(!saving)setOpen(v)}}><DialogContent className="review-dialog"><DialogHeader><DialogTitle>Verifica esito formazione</DialogTitle><DialogDescription>Registra l’esito dopo aver verificato scadenza e log. Una formazione recuperata non dimostra una consegna del partecipante.</DialogDescription></DialogHeader><form className="review-form" onSubmit={e=>{e.preventDefault();save();}}><fieldset disabled={saving}><label>Squadra<Select value={team} onValueChange={v=>fill(v,selectedRound)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{TEAM_NAMES.map(n=><SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent></Select></label><label>Giornata di lega<Select value={String(selectedRound)} onValueChange={v=>fill(team,Number(v))}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{Array.from({length:35},(_,i)=><SelectItem key={i} value={String(i+1)}>{i+1} · Serie A {i+4} · {HALF_LABEL[halfForRound(i+1)]}</SelectItem>)}</SelectContent></Select></label><label>Esito verificato<Select value={status} onValueChange={v=>setStatus(v as ReviewInput['status'])}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{Object.entries(statusLabel).map(([k,v])=><SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select></label><label>Scadenza · fuso del dispositivo ({Intl.DateTimeFormat().resolvedOptions().timeZone})<Input type="datetime-local" value={deadline} required={status!=='unverified'} onChange={e=>setDeadline(e.target.value)}/></label><label>Fonte della verifica<Input type="url" value={source} required onChange={e=>setSource(e.target.value)}/></label><label>Evidenza dal log o motivazione della correzione<Textarea value={note} required minLength={10} maxLength={2000} rows={3} onChange={e=>setNote(e.target.value)} placeholder="Descrivi ciò che hai verificato nel log della giornata."/></label></fieldset><p className="import-note">“Da verificare” sospende l’esito e ricalcola il riepilogo. Il precedente controllo rimane nello storico.</p>{error&&<p role="alert" className="import-error">{error}</p>}<button className="btn primary" type="submit" disabled={saving}>{saving?'Salvataggio…':'Salva esito e ricalcola'}</button></form></DialogContent></Dialog>
+  </>;
+}

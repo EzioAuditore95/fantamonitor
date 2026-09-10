@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { Review } from './penalties';
 export const TEAM_NAMES = ['AC Idovalproico','Atletico Fontanelle','FC LBVLA','FC SEMINI','FC Villaggio Mau Mau','FDS Sballo','I PIPPISTRELLI','Pro Spritz','Real Hasbulla','Salamandre'];
 export const TEAM_COLORS = ['#b6a1f7','#efa88d','#8bb8f6','#e4bc6e','#91cdd0','#afbcf3','#d4ee8a','#f0a0b8','#c3e878','#b9a6ec'];
 export const snapshotSchema = z.object({
@@ -21,7 +22,7 @@ export const snapshotSchema = z.object({
   if(Date.parse(s.observed_at)>Date.now()+60000)bad('La lettura ha una data futura.');
 });
 export type Snapshot=z.infer<typeof snapshotSchema>;
-export type Archive={snapshots:Snapshot[]; events:{team_key:string;round:number;source_label:string;source_time_text:string;source_url:string}[]};
+export type Archive={reviews:Review[];snapshots:Snapshot[]; events:{team_key:string;round:number;source_label:string;source_time_text:string;source_url:string}[]};
 export function normalize(s:Snapshot):Snapshot{return {...s,observed_at:new Date(s.observed_at).toISOString(),teams:[...s.teams].sort((a,b)=>a.team_key.localeCompare(b.team_key))};}
 export function canonical(value:unknown):string {
   if(Array.isArray(value))return '['+value.map(canonical).join(',')+']';
