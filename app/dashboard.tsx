@@ -14,7 +14,7 @@ import { TEAM_NAMES,TEAM_COLORS,initials,displayDate,latestByRound,type Archive,
 
 function Crest({name}:{name:string}){return <span className="crest" style={{backgroundColor:TEAM_COLORS[TEAM_NAMES.indexOf(name)]}} aria-hidden="true">{initials(name)}</span>}
 function Status({present}:{present:boolean|undefined}){return <span className={'badge '+(present===undefined?'unknown':present?'present':'absent')}>{present===undefined?<Info/>:present?<CheckCircle2/>:<Clock3/>}{present===undefined?'Nessuna lettura':present?'Inserita':'Non inserita'}</span>}
-function Blank({title,description}:{title:string;description:string}){return <Empty className="blank-panel"><EmptyHeader><EmptyTitle>{title}</EmptyTitle><EmptyDescription>{description}</EmptyHeader></Empty>}
+function Blank({title,description}:{title:string;description:string}){return <Empty className="blank-panel"><EmptyHeader><EmptyTitle>{title}</EmptyTitle><EmptyDescription>{description}</EmptyDescription></EmptyHeader></Empty>}
 const fixtures=[['AC Idovalproico','Atletico Fontanelle'],['FDS Sballo','FC LBVLA'],['Salamandre','FC SEMINI'],['Pro Spritz','Real Hasbulla'],['FC Villaggio Mau Mau','I PIPPISTRELLI']];
 
 export default function Dashboard(){
