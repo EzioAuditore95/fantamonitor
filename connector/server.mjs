@@ -25,7 +25,7 @@ async function loginAndOpen(page,round){
   await page.goto(baseUrl,{waitUntil:'networkidle',timeout:30000});
   const currentUrl=page.url();
   const loginForm=await page.locator('input[autocomplete="username"]:visible,input[placeholder="Username"]:visible').count()>0;
-  console.info('fantacalcio_login_state',{currentUrl,loginForm,title:await page.title()});
+  console.info('fantacalcio_login_state',{round,currentUrl,loginForm,title:await page.title()});
   if (/\/login(?:\/|$)/i.test(currentUrl)||loginForm) throw new Error('connector_auth_failed');
   return {baseUrl,currentUrl};
 }
@@ -67,8 +67,7 @@ function toTeamStatus(item,round){
   if(dto!=null&&typeof dto!=='object') throw new Error('connector_lineup_invalid_payload');
   if(dto&&Number(dto.tid)!==item.team.id) throw new Error('connector_lineup_team_mismatch');
   if(dto&&Number(dto.mday)!==round) throw new Error('connector_lineup_round_mismatch');
-  const starts=dto?.starts; if(dto&&starts!=null&&!Array.isArray(starts)) throw new Error('connector_lineup_invalid_starts');
-  const present=Array.isArray(starts)&&starts.length===11;
+  const present=Boolean(dto && dto.ldate && Number(dto.mday)===round);
   return {team_key:item.team.name,name:item.team.name,present,source_status:present?'Inserita':'Non inserita'};
 }
 
@@ -79,11 +78,11 @@ async function capture(round){
   console.info('fantacalcio_capture_complete',{round,inserted:snapshot.inserted,durationMs:Date.now()-started}); return snapshot;
 }
 
+function summarize(items){return items.map(({team,dto})=>({name:team.name,dto:!!dto,mday:dto?.mday??null,act:dto?.act??null,lucnt:dto?.lucnt??null,ldate:dto?.ldate??null,mdl:dto?.mdl??null,starts:Array.isArray(dto?.starts)?dto.starts.length:null,bench:Array.isArray(dto?.bench)?dto.bench.length:null}));}
 async function traceMetadata(){
   try{
-    const items=await fetchLineups(1);
-    const summary=items.map(({team,dto,payload})=>({name:team.name,id:team.id,dto:!!dto,keys:dto?Object.keys(dto):[],tid:dto?.tid??null,mday:dto?.mday??null,cmday:dto?.cmday??null,act:dto?.act??null,lucnt:dto?.lucnt??null,ldate:dto?.ldate??null,mdl:dto?.mdl??null,starts:Array.isArray(dto?.starts)?dto.starts.length:null,bench:Array.isArray(dto?.bench)?dto.bench.length:null,payloadKeys:payload&&typeof payload==='object'?Object.keys(payload):[]}));
-    console.info('fantacalcio_lineup_metadata '+JSON.stringify(summary));
+    const r1=await fetchLineups(1); console.info('fantacalcio_lineup_metadata_round1 '+JSON.stringify(summarize(r1)));
+    const r2=await fetchLineups(2); console.info('fantacalcio_lineup_metadata_round2 '+JSON.stringify(summarize(r2)));
   }catch(error){console.error('fantacalcio_metadata_trace_failed',{code:error instanceof Error?error.message:String(error)});}
 }
 
