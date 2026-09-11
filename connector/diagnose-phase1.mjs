@@ -6,7 +6,7 @@ function shape(v,d=0){if(d>2)return Array.isArray(v)?`array(${v.length})`:typeof
 const browser=await chromium.launch({headless:true});
 const page=await browser.newPage();
 const seen=[];
-page.on('response',async r=>{const u=r.url();if(!u.includes('fantacalcio.it')||r.status()!==200)return;const ct=(await r.allHeaders())['content-type']||'';if(!ct.includes('json'))return;try{const j=await r.json();seen.push({url:u,shape:shape(j)});}catch{}});
+page.on('response',async r=>{const u=r.url();if(!u.includes('fantacalcio.it')||r.status()!==200)return;const ct=(await r.allHeaders())['content-type']||'';if(!ct.includes('json'))return;try{const j=await r.json();seen.push({url:u,shape:shape(j),json:j});}catch{}});
 try{
  await page.goto('https://leghe.fantacalcio.it/login',{waitUntil:'domcontentloaded',timeout:20000});
  await page.locator('input[placeholder="Username"],input[autocomplete="username"]').first().fill(username);
@@ -16,6 +16,9 @@ try{
  await page.goto(`https://leghe.fantacalcio.it/${league}/view/competition/${competition}/manage-lineups/${round}`,{waitUntil:'networkidle',timeout:30000});
  await page.waitForTimeout(2500);
  console.log('PHASE1_DIAGNOSTIC_START');
- for(const x of seen){if(/team|lineup|rose|rosa|market|competition|calendar|match|squad/i.test(x.url))console.log(JSON.stringify(x));}
+ for(const x of seen){if(/team|lineup|rose|rosa|market|competition|calendar|match|squad/i.test(x.url))console.log(JSON.stringify({url:x.url,shape:x.shape}));}
+ const teamsPayload=seen.find(x=>/\/onboarding\/v1\/league\/competition\/teams/.test(x.url))?.json;
+ const sample=teamsPayload?.data?.[0];
+ if(sample)console.log('PHASE1_TEAM_SAMPLE',JSON.stringify({n:sample.n,nu:sample.nu,cri:sample.cri,crs:sample.crs,cr:sample.cr,l:sample.l,cal:sample.cal,cs:sample.cs,m:sample.m,ms:sample.ms,st:sample.st,lm:sample.lm,mm:sample.mm}));
  console.log('PHASE1_DIAGNOSTIC_END');
 }finally{await browser.close();}
