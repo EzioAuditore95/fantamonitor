@@ -4,7 +4,10 @@ const username=process.env.FANTACALCIO_USERNAME||'',password=process.env.FANTACA
 const supabaseUrl=(process.env.SUPABASE_URL||'').replace(/\/$/,''),supabaseKey=process.env.SUPABASE_PUBLISHABLE_KEY||'',autoSyncSecret=process.env.AUTO_SYNC_DB_SECRET||'';
 const league='chefantavitae10',competition='337500',round=1;
 const names=['AC Idovalproico','Atletico Fontanelle','FC LBVLA','FC SEMINI','FC Villaggio Mau Mau','FDS Sballo','I PIPPISTRELLI','Pro Spritz','Real Hasbulla','Salamandre'];
+const ASSET='https://d2lhpso9w1g8dk.cloudfront.net/web/risorse';
 function p(x){return x&&typeof x==='object'?{id:x.id,name:x.name,role:x.role}:null;}
+function crest(meta){return meta?.l?`${ASSET}/squadra_2026/${meta.l}`:undefined;}
+function kit(meta){return meta?.ms?`${ASSET}/maglietta_2026/${meta.ms}`:undefined;}
 const browser=await chromium.launch({headless:true});const page=await browser.newPage();let teamsPayload=null;
 const listener=async r=>{if(/\/onboarding\/v1\/league\/competition\/teams/.test(r.url())&&r.status()===200){try{teamsPayload=await r.json();}catch{}}};page.on('response',listener);
 try{
@@ -18,7 +21,7 @@ try{
  const first=await reqPromise;const headers={};for(const [k,v] of Object.entries(await first.allHeaders())){const l=k.toLowerCase();if(!k.startsWith(':')&&!['host','content-length','connection','accept-encoding'].includes(l)&&!l.startsWith('sec-fetch-'))headers[k]=v;}
  const byName=new Map((teamsPayload?.data||[]).map(t=>[t.n,t]));
  const teams=[];
- for(const name of names){const meta=byName.get(name);if(!meta)throw new Error(`phase1_seed_team_missing:${name}`);const r=await fetch(`https://apileague.fantacalcio.it/gaming/v1/teamLineup/visualizza/A/${competition}/${meta.id}/${round}`,{headers});if(!r.ok)throw new Error(`phase1_seed_lineup_${r.status}`);const payload=await r.json(),dto=payload.teamLineupDto||null;const present=Boolean(dto&&dto.mday===round&&dto.ldate);const formation=dto?{module:dto.module,starters:(dto.startersPlayers||[]).map(p),bench:(dto.benchPlayers||[]).map(p),roster:(dto.rosterPlayers||[]).map(p)}:undefined;teams.push({team_key:name,name,present,source_status:present?'check-circle':'Non inserita',team_id:meta.id,manager:meta.manager,budget:meta.budget,crest_url:meta.crest,kit_url:meta.kit,formation});}
+ for(const name of names){const meta=byName.get(name);if(!meta)throw new Error(`phase1_seed_team_missing:${name}`);const r=await fetch(`https://apileague.fantacalcio.it/gaming/v1/teamLineup/visualizza/A/${competition}/${meta.id}/${round}`,{headers});if(!r.ok)throw new Error(`phase1_seed_lineup_${r.status}`);const payload=await r.json(),dto=payload.teamLineupDto||null;const present=Boolean(dto&&dto.mday===round&&dto.ldate);const formation=dto?{module:dto.module,starters:(dto.startersPlayers||[]).map(p),bench:(dto.benchPlayers||[]).map(p),roster:(dto.rosterPlayers||[]).map(p)}:undefined;teams.push({team_key:name,name,present,source_status:present?'check-circle':'Non inserita',team_id:meta.id,manager:meta.nu,budget:Number(meta.crs),crest_url:crest(meta),kit_url:kit(meta),formation});}
  const snapshot={schema_version:1,league,season:'2026-2027',competition_id:competition,round,observed_at:new Date().toISOString(),source:'authenticated_ui',source_url:`https://leghe.fantacalcio.it/${league}/view/competition/${competition}/manage-lineups/${round}`,expected_total:10,inserted:teams.filter(t=>t.present).length,teams};
  const rr=await fetch(`${supabaseUrl}/rest/v1/rpc/fm_bot_import_snapshot`,{method:'POST',headers:{apikey:supabaseKey,'content-type':'application/json'},body:JSON.stringify({access_key:autoSyncSecret,sample:snapshot})});const text=await rr.text();if(!rr.ok)throw new Error(`phase1_seed_supabase_${rr.status}:${text.slice(0,200)}`);console.log('PHASE1_SEED_COMPLETE',JSON.stringify({inserted:snapshot.inserted,enriched:teams.filter(t=>t.manager&&t.crest_url&&t.formation?.starters?.length).length}));
 }finally{page.off('response',listener);await browser.close();}
