@@ -1,0 +1,4 @@
+FROM node:22-slim
+WORKDIR /app
+COPY cron.mjs scheduler-server.mjs ./
+CMD ["node","scheduler-server.mjs"]
