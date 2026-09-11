@@ -4,5 +4,8 @@
   "type": "module",
   "engines": { "node": ">=22" },
   "scripts": { "start": "node server.mjs" },
-  "dependencies": { "playwright": "1.55.0" }
+  "dependencies": {
+    "jose": "^6.1.0",
+    "playwright": "1.55.0"
+  }
 }
