@@ -2,13 +2,37 @@ import { z } from 'zod';
 import type { Review } from './penalties';
 export const TEAM_NAMES = ['AC Idovalproico','Atletico Fontanelle','FC LBVLA','FC SEMINI','FC Villaggio Mau Mau','FDS Sballo','I PIPPISTRELLI','Pro Spritz','Real Hasbulla','Salamandre'];
 export const TEAM_COLORS = ['#b6a1f7','#efa88d','#8bb8f6','#e4bc6e','#91cdd0','#afbcf3','#d4ee8a','#f0a0b8','#c3e878','#b9a6ec'];
+
+const playerSchema=z.object({
+  id:z.union([z.string(),z.number()]).optional(),
+  name:z.string().min(1),
+  role:z.string().optional(),
+  shirt_number:z.number().int().optional(),
+  image_url:z.string().optional(),
+}).strict();
+const formationSchema=z.object({
+  module:z.string().optional(),
+  starters:z.array(playerSchema).optional(),
+  bench:z.array(playerSchema).optional(),
+  roster:z.array(playerSchema).optional(),
+}).strict();
+const teamSchema=z.object({
+  team_key:z.string(),name:z.string(),present:z.boolean(),source_status:z.enum(['check-circle','Non inserita']),
+  team_id:z.number().int().positive().optional(),
+  manager:z.string().optional(),
+  budget:z.number().optional(),
+  crest_url:z.string().optional(),
+  kit_url:z.string().optional(),
+  formation:formationSchema.optional(),
+}).strict();
+
 export const snapshotSchema = z.object({
   schema_version: z.literal(1), league:z.literal('chefantavitae10'),
   season:z.literal('2026-2027'), competition_id:z.literal('337500'),
   round:z.number().int().min(1).max(35), observed_at:z.string().datetime({offset:true}),
   source:z.literal('authenticated_ui'),source_url:z.string().url(),
   expected_total:z.literal(10),inserted:z.number().int().min(0).max(10),
-  teams:z.array(z.object({team_key:z.string(),name:z.string(),present:z.boolean(),source_status:z.enum(['check-circle','Non inserita'])}).strict()).length(10),
+  teams:z.array(teamSchema).length(10),
 }).strict().superRefine((s,ctx)=>{
   const bad=(message:string)=>ctx.addIssue({code:z.ZodIssueCode.custom,message});
   const url=new URL(s.source_url);
@@ -22,6 +46,7 @@ export const snapshotSchema = z.object({
   if(Date.parse(s.observed_at)>Date.now()+60000)bad('La lettura ha una data futura.');
 });
 export type Snapshot=z.infer<typeof snapshotSchema>;
+export type TeamSnapshot=Snapshot['teams'][number];
 export type Archive={canManage?:boolean;reviews:Review[];snapshots:Snapshot[]; events:{team_key:string;round:number;source_label:string;source_time_text:string;source_url:string}[]};
 export function normalize(s:Snapshot):Snapshot{return {...s,observed_at:new Date(s.observed_at).toISOString(),teams:[...s.teams].sort((a,b)=>a.team_key.localeCompare(b.team_key))};}
 export function canonical(value:unknown):string {
