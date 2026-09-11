@@ -14,7 +14,8 @@ export async function syncFromConnector(userId: string, round: number) {
   if (!Number.isInteger(round) || round < 1 || round > 35) throw new Error('Giornata non valida.');
   const timestamp = String(Date.now());
   const requestBody = JSON.stringify({ round });
-  const response = await fetch(endpoint.replace(/\/$/, '') + '/sync', {
+  const normalizedEndpoint = /^https?:\/\//i.test(endpoint) ? endpoint : `https://${endpoint}`;
+  const response = await fetch(normalizedEndpoint.replace(/\/$/, '') + '/sync', {
     method: 'POST', headers: { 'content-type': 'application/json', 'x-fm-timestamp': timestamp, 'x-fm-signature': signature(timestamp, requestBody) },
     body: requestBody, cache: 'no-store', signal: AbortSignal.timeout(25_000),
   });
