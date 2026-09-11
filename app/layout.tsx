@@ -3,6 +3,7 @@ import "./globals.css";
 import "./glass.css";
 import "./glass-refinement.css";
 import GlobalBottomNav from "./global-bottom-nav";
+import TabQueryBridge from "./tab-query-bridge";
 
 export const metadata: Metadata = {
   title: "FANTAMONITOR · CheFantaVitaE10",
@@ -20,7 +21,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="it">
-      <body className="antialiased">{children}<GlobalBottomNav/></body>
+      <body className="antialiased">{children}<TabQueryBridge/><GlobalBottomNav/></body>
     </html>
   );
 }
