@@ -5,6 +5,7 @@ COPY package.json ./
 RUN npm install --omit=dev
 COPY server.mjs ./
 COPY phase1-patch.mjs ./
+COPY phase1-seed.mjs ./
 
 ENV NODE_ENV=production
 CMD ["npm", "start"]
