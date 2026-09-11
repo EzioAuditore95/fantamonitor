@@ -22,7 +22,10 @@ async function capture(round) {
     await page.getByRole('button',{name:'LOGIN'}).click(); await page.waitForLoadState('domcontentloaded');
     const url=`https://leghe.fantacalcio.it/${league}/view/competition/${competition}/manage-lineups/${round}`;
     await page.goto(url,{waitUntil:'networkidle',timeout:30000});
-    const text=await page.locator('body').innerText(); if(/Sessione scaduta|Inserisci le tue credenziali/i.test(text)) throw new Error('connector_auth_failed');
+    const currentUrl = page.url();
+    const loginForm = await page.locator('input[autocomplete="username"],input[placeholder="Username"]').count() > 0;
+    console.info('fantacalcio_login_state', { currentUrl, loginForm, title: await page.title() });
+    if (/\/login(?:\/|$)/i.test(currentUrl) || loginForm) throw new Error('connector_auth_failed');
     const teamsData=await page.evaluate((names)=>names.map(name=>{const row=[...document.querySelectorAll('*')].find(el=>el.textContent?.trim()===name);const container=row?.closest('button,li,[role="button"],tr,div');const value=container?.textContent||'';const present=!/non inserita/i.test(value)&&/check|inserita|[1-9]-[1-9]/i.test(value);return {team_key:name,name,present,source_status:present?'check-circle':'Non inserita'};}),teams);
     if(teamsData.some(t=>typeof t.present!=='boolean')) throw new Error('connector_incomplete_teams');
     const observed_at=new Date().toISOString(); return {schema_version:1,league,season:'2026-2027',competition_id:competition,round,observed_at,source:'authenticated_ui',source_url:url,expected_total:10,inserted:teamsData.filter(t=>t.present).length,teams:teamsData};
