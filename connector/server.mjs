@@ -20,10 +20,10 @@ async function capture(round, trace=false) {
     if (trace) {
       page.on('response', async response => {
         const u=response.url();
-        if (/\/gaming\/v1\/lineup\/notcalculated\//.test(u) || /\/gaming\/v1\/teamLineup\/visualizza\//.test(u) || /\/onboarding\/v1\/league\/competition\/teams/.test(u)) {
+        if (/\/gaming\/v1\/lineup\/notcalculated\//.test(u) || /\/gaming\/v1\/teamLineup\/visualizza\//.test(u)) {
           let body='';
-          try { body=(await response.text()).slice(0,20000); } catch {}
-          console.info('fantacalcio_target_response', { status:response.status(), url:u, body });
+          try { body=(await response.text()).slice(0,12000); } catch {}
+          console.info('fantacalcio_lineup_payload '+JSON.stringify({status:response.status(),url:u,body}));
         }
       });
     }
