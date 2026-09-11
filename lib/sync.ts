@@ -14,14 +14,17 @@ export async function syncFromConnector(userId: string, round: number) {
   if (!Number.isInteger(round) || round < 1 || round > 35) throw new Error('Giornata non valida.');
   const timestamp = String(Date.now());
   const requestBody = JSON.stringify({ round });
-  const normalizedEndpoint = /^https?:\/\//i.test(endpoint) ? endpoint : `https://${endpoint}`;
-  const response = await fetch(normalizedEndpoint.replace(/\/$/, '') + '/sync', {
+  const response = await fetch(endpoint.replace(/\/$/, '') + '/sync', {
     method: 'POST', headers: { 'content-type': 'application/json', 'x-fm-timestamp': timestamp, 'x-fm-signature': signature(timestamp, requestBody) },
     body: requestBody, cache: 'no-store', signal: AbortSignal.timeout(25_000),
   });
   const text = await response.text();
   if (text.length > MAX_RESPONSE) throw new Error('Risposta del connettore troppo grande.');
-  if (!response.ok) throw new Error(response.status === 401 ? 'Autenticazione del connettore rifiutata.' : 'Connettore non disponibile.');
+  if (!response.ok) {
+    if (response.status === 401) throw new Error('Autenticazione del connettore rifiutata.');
+    const detail = text.replace(/[\r\n]+/g, ' ').slice(0, 160);
+    throw new Error(`Connettore non disponibile (${response.status})${detail ? `: ${detail}` : '.'}`);
+  }
   const returnedSignature = response.headers.get('x-fm-signature') ?? '';
   const expected = signature(timestamp, text);
   if (!returnedSignature || returnedSignature.length !== expected.length || !timingSafeEqual(Buffer.from(returnedSignature), Buffer.from(expected))) throw new Error('Firma del connettore non valida.');
