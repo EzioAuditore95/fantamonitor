@@ -10,6 +10,9 @@ const password=process.env.FANTACALCIO_PASSWORD||'';
 const supabaseUrl=process.env.SUPABASE_URL||'';
 const supabaseKey=process.env.SUPABASE_PUBLISHABLE_KEY||'';
 const autoSyncSecret=process.env.AUTO_SYNC_DB_SECRET||'';
+const telegramBotToken=process.env.TELEGRAM_BOT_TOKEN||'';
+const telegramChatId=process.env.TELEGRAM_CHAT_ID||'';
+const telegramThreadId=process.env.TELEGRAM_THREAD_ID||'';
 const league='chefantavitae10',competition='337500';
 const teams=['AC Idovalproico','Atletico Fontanelle','FC LBVLA','FC SEMINI','FC Villaggio Mau Mau','FDS Sballo','I PIPPISTRELLI','Pro Spritz','Real Hasbulla','Salamandre'];
 const secretFingerprint=crypto.createHash('sha256').update(secret).digest('hex').slice(0,12);
@@ -31,6 +34,53 @@ function findTeamObjects(value,out=[]){
   if(name&&Number.isInteger(id)&&id>0)out.push({name:name.trim(),id});
   for(const child of Object.values(value))findTeamObjects(child,out);
   return out;
+}
+
+function checkpointLabel(checkpoint){
+  const normalized=checkpoint.toLowerCase().replace(/\s+/g,'');
+  if(normalized.includes('24'))return '24 ore prima';
+  if(normalized.includes('12'))return '12 ore prima';
+  if(normalized.includes('60')||normalized.includes('1h'))return '1 ora prima';
+  if(normalized.includes('15'))return '15 minuti prima';
+  if(normalized.includes('+5')||normalized.includes('after')||normalized.includes('post')||normalized.includes('5m'))return '5 minuti dopo';
+  return checkpoint;
+}
+function buildTelegramMessage(snapshot,checkpoint){
+  const missing=snapshot.teams.filter(team=>!team.present).map(team=>team.name);
+  const label=checkpointLabel(checkpoint);
+  const header=`FANTAMONITOR — Giornata ${snapshot.round}`;
+  const timing=`Controllo: ${label}`;
+  const summary=`Formazioni inserite: ${snapshot.inserted}/${snapshot.expected_total}`;
+  if(missing.length===0)return `${header}\n${timing}\n${summary}\n\nTutte le squadre hanno inserito la formazione.`;
+  const list=missing.map(name=>`• ${name}`).join('\n');
+  return `${header}\n${timing}\n${summary}\n\nSquadre senza formazione (${missing.length}):\n${list}`;
+}
+async function sendTelegramReminder(snapshot,checkpoint){
+  if(!telegramBotToken||!telegramChatId){
+    console.warn('telegram_notification_skipped',{reason:'not_configured',round:snapshot.round,checkpoint});
+    return {status:'skipped'};
+  }
+  const payload={
+    chat_id:telegramChatId,
+    text:buildTelegramMessage(snapshot,checkpoint),
+    disable_web_page_preview:true
+  };
+  if(telegramThreadId){
+    const threadId=Number(telegramThreadId);
+    if(Number.isInteger(threadId)&&threadId>0)payload.message_thread_id=threadId;
+  }
+  const response=await fetch(`https://api.telegram.org/bot${telegramBotToken}/sendMessage`,{
+    method:'POST',
+    headers:{'content-type':'application/json'},
+    body:JSON.stringify(payload),
+    signal:AbortSignal.timeout(10000)
+  });
+  const text=await response.text();
+  if(!response.ok)throw new Error(`telegram_http_${response.status}:${text.slice(0,180)}`);
+  let result=null;try{result=JSON.parse(text);}catch{}
+  if(result&&result.ok===false)throw new Error(`telegram_api_error:${String(result.description||'unknown').slice(0,180)}`);
+  console.info('telegram_notification_sent',{round:snapshot.round,checkpoint,missing:snapshot.expected_total-snapshot.inserted});
+  return {status:'sent'};
 }
 
 async function loginAndOpen(page,round){
@@ -122,9 +172,10 @@ async function runAutoSync(){
   const round=Number(claim.round),checkpoint=String(claim.checkpoint);
   try{
     const snapshot=await capture(round);
+    const telegram=await sendTelegramReminder(snapshot,checkpoint);
     const result=await rpc('fm_complete_auto_sync',{access_key:autoSyncSecret,day:round,checkpoint_name:checkpoint,sample:snapshot});
-    console.info('auto_sync_complete',{round,checkpoint,inserted:snapshot.inserted});
-    return {status:'success',round,checkpoint,result};
+    console.info('auto_sync_complete',{round,checkpoint,inserted:snapshot.inserted,telegram:telegram.status});
+    return {status:'success',round,checkpoint,telegram:telegram.status,result};
   }catch(error){
     const message=error instanceof Error?error.message:'auto_sync_failed';
     await rpc('fm_fail_auto_sync',{access_key:autoSyncSecret,day:round,checkpoint_name:checkpoint,error_text:message}).catch(()=>{});
@@ -146,4 +197,4 @@ const server=http.createServer(async(req,res)=>{
   }
   return plainJson(res,404,{error:'not_found'});
 });
-server.listen(port,()=>console.log(`connector listening on ${port}`,{secretFingerprint,hasSecret:Boolean(secret),autoSyncConfigured:Boolean(autoSyncSecret&&supabaseUrl&&supabaseKey)}));
+server.listen(port,()=>console.log(`connector listening on ${port}`,{secretFingerprint,hasSecret:Boolean(secret),autoSyncConfigured:Boolean(autoSyncSecret&&supabaseUrl&&supabaseKey),telegramConfigured:Boolean(telegramBotToken&&telegramChatId)}));
