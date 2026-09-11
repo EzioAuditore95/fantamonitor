@@ -33,6 +33,18 @@ function findTeamObjects(value,out=[]) {
   return out;
 }
 
+function timingFields(value,path='',out={}){
+  if(out&&Object.keys(out).length>80)return out;
+  if(Array.isArray(value)){value.slice(0,20).forEach((item,i)=>timingFields(item,`${path}[${i}]`,out));return out;}
+  if(!value||typeof value!=='object')return out;
+  for(const [key,child] of Object.entries(value)){
+    const next=path?`${path}.${key}`:key;
+    if(/date|time|day|round|deadline|start|kick|mday|cmday|giorn/i.test(key)&&(['string','number','boolean'].includes(typeof child)||child===null))out[next]=child;
+    if(child&&typeof child==='object')timingFields(child,next,out);
+  }
+  return out;
+}
+
 async function loginAndOpen(page,round){
   await page.goto('https://leghe.fantacalcio.it/login',{waitUntil:'domcontentloaded',timeout:20000});
   await page.locator('input[placeholder="Username"],input[autocomplete="username"]').first().fill(username);
@@ -121,19 +133,8 @@ function toTeamStatus(item,round){
   if(dto!=null&&typeof dto!=='object') throw new Error('connector_lineup_invalid_payload');
   if(dto&&Number(dto.tid)!==item.team.id) throw new Error('connector_lineup_team_mismatch');
   if(dto&&Number(dto.mday)!==round) throw new Error('connector_lineup_round_mismatch');
-
-  // Fantacalcio marks a lineup as registered when a lineup record exists for
-  // the requested matchday and has a last-registration timestamp (ldate).
-  // starts/bench may legitimately be empty in the management view and must
-  // not be used to infer submission status.
   const present=Boolean(dto && Number(dto.mday)===round && typeof dto.ldate==='string' && dto.ldate.length>0);
-
-  return {
-    team_key:item.team.name,
-    name:item.team.name,
-    present,
-    source_status:present?'check-circle':'Non inserita'
-  };
+  return {team_key:item.team.name,name:item.team.name,present,source_status:present?'check-circle':'Non inserita'};
 }
 
 async function capture(round){
@@ -142,23 +143,31 @@ async function capture(round){
   const items=await fetchLineups(round);
   const teamsData=items.map(x=>toTeamStatus(x,round));
   if(teamsData.length!==teams.length) throw new Error('connector_incomplete_teams');
-
   const observed_at=new Date().toISOString();
-  const snapshot={
-    schema_version:1,
-    league,
-    season:'2026-2027',
-    competition_id:competition,
-    round,
-    observed_at,
-    source:'authenticated_ui',
-    source_url:`https://leghe.fantacalcio.it/${league}/view/competition/${competition}/manage-lineups/${round}`,
-    expected_total:teams.length,
-    inserted:teamsData.filter(t=>t.present).length,
-    teams:teamsData
-  };
+  const snapshot={schema_version:1,league,season:'2026-2027',competition_id:competition,round,observed_at,source:'authenticated_ui',source_url:`https://leghe.fantacalcio.it/${league}/view/competition/${competition}/manage-lineups/${round}`,expected_total:teams.length,inserted:teamsData.filter(t=>t.present).length,teams:teamsData};
   console.info('fantacalcio_capture_complete',{round,inserted:snapshot.inserted,durationMs:Date.now()-started});
   return snapshot;
+}
+
+async function probeTiming(){
+  if(!username||!password)return;
+  const browser=await chromium.launch({headless:true});
+  const page=await browser.newPage();
+  const seen=new Set();
+  const listener=async response=>{
+    const url=response.url();
+    if(!url.startsWith('https://apileague.fantacalcio.it/')||response.status()!==200||seen.has(url))return;
+    seen.add(url);
+    if(!/lineup|match|round|calendar|competition|game/i.test(url))return;
+    try{
+      const payload=await response.json();
+      const fields=timingFields(payload);
+      if(Object.keys(fields).length)console.info('fantacalcio_timing_probe',JSON.stringify({url,fields}));
+    }catch{}
+  };
+  page.on('response',listener);
+  try{await loginAndOpen(page,1);await page.waitForTimeout(3000);}catch(e){console.error('fantacalcio_timing_probe_failed',e instanceof Error?e.message:'unknown');}
+  finally{page.off('response',listener);await browser.close();}
 }
 
 const server=http.createServer(async(req,res)=>{
@@ -181,4 +190,4 @@ const server=http.createServer(async(req,res)=>{
   }
 });
 
-server.listen(port,()=>console.log(`connector listening on ${port}`,{secretFingerprint,hasSecret:Boolean(secret)}));
+server.listen(port,()=>{console.log(`connector listening on ${port}`,{secretFingerprint,hasSecret:Boolean(secret)});setTimeout(()=>probeTiming().catch(()=>{}),1000);});
