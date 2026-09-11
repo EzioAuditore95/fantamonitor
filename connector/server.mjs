@@ -30,10 +30,24 @@ async function capture(round) {
     const url=`https://leghe.fantacalcio.it/${league}/view/competition/${competition}/manage-lineups/${round}`;
     await page.goto(url,{waitUntil:'networkidle',timeout:30000});
     const currentUrl = page.url();
-    const loginForm = await page.locator('input[autocomplete="username"],input[placeholder="Username"]').count() > 0;
+    const loginForm = await page.locator('input[autocomplete="username"]:visible,input[placeholder="Username"]:visible').count() > 0;
     console.info('fantacalcio_login_state', { currentUrl, loginForm, title: await page.title() });
     if (/\/login(?:\/|$)/i.test(currentUrl) || loginForm) throw new Error('connector_auth_failed');
-    const teamsData=await page.evaluate((names)=>names.map(name=>{const row=[...document.querySelectorAll('*')].find(el=>el.textContent?.trim()===name);const container=row?.closest('button,li,[role="button"],tr,div');const value=container?.textContent||'';const present=!/non inserita/i.test(value)&&/check|inserita|[1-9]-[1-9]/i.test(value);return {team_key:name,name,present,source_status:present?'check-circle':'Non inserita'};}),teams);
+    const teamsData=await page.evaluate((names)=>names.map(name=>{
+      const exact=[...document.querySelectorAll('*')].find(el=>el.children.length===0&&el.textContent?.trim()===name);
+      const candidates=[]; let node=exact;
+      for(let i=0;node&&i<7;i++,node=node.parentElement){
+        const text=(node.innerText||node.textContent||'').replace(/\s+/g,' ').trim();
+        if(text.includes(name)&&text.length<1200) candidates.push(node);
+      }
+      const negative=/non\s*(inserita|consegnata)|mancante|assente|nessuna formazione/i;
+      const positive=/(inserita|consegnata|inviata|check|success|submitted|done|circle-check|fa-check|text-success|text-green|green)/i;
+      const container=candidates.find(el=>positive.test(`${el.innerText||''} ${el.className||''} ${el.innerHTML||''}`)&&!negative.test(el.innerText||''))||candidates[candidates.length-1];
+      const value=(container?.innerText||container?.textContent||'').replace(/\s+/g,' ').trim();
+      const markup=`${container?.className||''} ${container?.innerHTML||''}`;
+      const present=!negative.test(value)&&positive.test(`${value} ${markup}`);
+      return {team_key:name,name,present,source_status:present?'Inserita':'Non inserita'};
+    }),teams);
     if(teamsData.some(t=>typeof t.present!=='boolean')) throw new Error('connector_incomplete_teams');
     const observed_at=new Date().toISOString(); return {schema_version:1,league,season:'2026-2027',competition_id:competition,round,observed_at,source:'authenticated_ui',source_url:url,expected_total:10,inserted:teamsData.filter(t=>t.present).length,teams:teamsData};
   } finally { await browser.close(); }
