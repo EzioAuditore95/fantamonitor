@@ -1,5 +1,6 @@
 import { getAppUser } from '@/app/auth';
-import { TEAM_NAMES,type MatchResult,type PerformancePayload,type StandingRow } from '@/lib/performance';
+import { TEAM_NAMES } from '@/lib/model';
+import { type MatchResult,type PerformancePayload,type StandingRow } from '@/lib/performance';
 
 const headers={'Cache-Control':'private, no-store'};
 const ORIGIN='https://leghe.fantacalcio.it';
