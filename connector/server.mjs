@@ -15,6 +15,43 @@ function json(res,status,body,ts) { const raw=JSON.stringify(body);res.writeHead
 function findTeamObjects(value,out=[]) { if (Array.isArray(value)) { for (const item of value) findTeamObjects(item,out); return out; } if (!value || typeof value!=='object') return out; const name=typeof value.n==='string'?value.n:typeof value.name==='string'?value.name:typeof value.nome==='string'?value.nome:''; const id=Number(value.id??value.teamId??value.tid); if (name && Number.isInteger(id) && id>0) out.push({name:name.trim(),id}); for (const child of Object.values(value)) findTeamObjects(child,out); return out; }
 function validateLineup(team,round,payload) { const dto=payload?.teamLineupDto; if (dto!=null && typeof dto!=='object') throw new Error('connector_lineup_invalid_payload'); if (dto && Number(dto.tid)!==team.id) throw new Error('connector_lineup_team_mismatch'); if (dto && Number(dto.mday)!==round) throw new Error('connector_lineup_round_mismatch'); const starts=dto?.starts; if (dto && starts!=null && !Array.isArray(starts)) throw new Error('connector_lineup_invalid_starts'); const present=Array.isArray(starts)&&starts.length===11; return {team_key:team.name,name:team.name,present,source_status:present?'Inserita':'Non inserita'}; }
 
+async function loginAndOpen(page,round){
+  await page.goto('https://leghe.fantacalcio.it/login',{waitUntil:'domcontentloaded',timeout:20000});
+  await page.locator('input[placeholder="Username"],input[autocomplete="username"]').first().fill(username);
+  await page.locator('input[placeholder="Password"],input[autocomplete="current-password"]').first().fill(password);
+  await page.getByRole('button',{name:'LOGIN'}).click();
+  await Promise.race([page.waitForURL(u=>!/\/login(?:\/|$)/i.test(new URL(u).pathname),{timeout:15000}),page.waitForTimeout(3000)]);
+  await page.waitForLoadState('networkidle',{timeout:10000}).catch(()=>{});
+  const baseUrl=`https://leghe.fantacalcio.it/${league}/view/competition/${competition}/manage-lineups/${round}`;
+  await page.goto(baseUrl,{waitUntil:'networkidle',timeout:30000});
+  const currentUrl=page.url();
+  const loginForm=await page.locator('input[autocomplete="username"]:visible,input[placeholder="Username"]:visible').count()>0;
+  console.info('fantacalcio_login_state',{currentUrl,loginForm,title:await page.title()});
+  if (/\/login(?:\/|$)/i.test(currentUrl)||loginForm) throw new Error('connector_auth_failed');
+  return {baseUrl,currentUrl};
+}
+
+async function traceDom(){
+  const browser=await chromium.launch({headless:true}); const page=await browser.newPage();
+  try{
+    await loginAndOpen(page,1);
+    const rows=await page.evaluate((names)=>names.map(name=>{
+      const exact=[...document.querySelectorAll('*')].find(el=>el.children.length===0&&el.textContent?.trim()===name);
+      if(!exact) return {name,found:false};
+      let node=exact;
+      let best=null;
+      for(let i=0;node&&i<8;i++,node=node.parentElement){
+        const text=(node.innerText||node.textContent||'').replace(/\s+/g,' ').trim();
+        if(text.includes(name)&&text.length<700) best=node;
+      }
+      if(!best) return {name,found:true};
+      const icons=[...best.querySelectorAll('img,svg,i,span')].map(el=>({tag:el.tagName,cls:typeof el.className==='string'?el.className:(el.className?.baseVal||''),src:el.getAttribute?.('src')||'',alt:el.getAttribute?.('alt')||'',title:el.getAttribute?.('title')||'',text:(el.textContent||'').trim()})).filter(x=>x.src||x.alt||x.title||x.cls||x.text).slice(-20);
+      return {name,found:true,text:(best.innerText||best.textContent||'').replace(/\s+/g,' ').trim(),html:best.outerHTML.slice(0,3000),icons};
+    }),teams);
+    console.info('fantacalcio_dom_rows '+JSON.stringify(rows));
+  } finally { await browser.close(); }
+}
+
 async function capture(round) {
   if (!username || !password) throw new Error('connector_credentials_missing');
   const started=Date.now(); const browser=await chromium.launch({headless:true}); const page=await browser.newPage(); let competitionTeamsPayload=null;
@@ -22,19 +59,9 @@ async function capture(round) {
   page.on('response',responseListener);
   try {
     const cdp=await page.context().newCDPSession(page); await cdp.send('Network.setCacheDisabled',{cacheDisabled:true});
-    await page.goto('https://leghe.fantacalcio.it/login',{waitUntil:'domcontentloaded',timeout:20000});
-    await page.locator('input[placeholder="Username"],input[autocomplete="username"]').first().fill(username);
-    await page.locator('input[placeholder="Password"],input[autocomplete="current-password"]').first().fill(password);
-    await page.getByRole('button',{name:'LOGIN'}).click();
-    await Promise.race([page.waitForURL(u=>!/\/login(?:\/|$)/i.test(new URL(u).pathname),{timeout:15000}),page.waitForTimeout(3000)]);
-    await page.waitForLoadState('networkidle',{timeout:10000}).catch(()=>{});
-    const baseUrl=`https://leghe.fantacalcio.it/${league}/view/competition/${competition}/manage-lineups/${round}`;
     const firstApiRequestPromise=page.waitForRequest(r=>/\/gaming\/v1\/teamLineup\/visualizza\//.test(r.url()),{timeout:20000});
-    await page.goto(baseUrl,{waitUntil:'networkidle',timeout:30000});
-    const firstApiRequest=await firstApiRequestPromise; const currentUrl=page.url();
-    const loginForm=await page.locator('input[autocomplete="username"]:visible,input[placeholder="Username"]:visible').count()>0;
-    console.info('fantacalcio_login_state',{currentUrl,loginForm,title:await page.title()});
-    if (/\/login(?:\/|$)/i.test(currentUrl)||loginForm) throw new Error('connector_auth_failed');
+    const {baseUrl}=await loginAndOpen(page,round);
+    const firstApiRequest=await firstApiRequestPromise;
     if (!competitionTeamsPayload) throw new Error('connector_team_list_missing');
     const discovered=findTeamObjects(competitionTeamsPayload); const uniqueByName=new Map(); for (const item of discovered) if (!uniqueByName.has(item.name)) uniqueByName.set(item.name,item.id);
     const teamIds=teams.map(name=>({name,id:uniqueByName.get(name)}));
@@ -48,4 +75,4 @@ async function capture(round) {
 }
 
 const server=http.createServer(async(req,res)=>{let raw='';for await(const chunk of req)raw+=chunk;if(req.method!=='POST'||req.url!=='/sync')return json(res,404,{error:'not_found'},String(Date.now()));const ts=String(req.headers['x-fm-timestamp']||Date.now());if(!auth(req,raw)){console.error('hmac_rejected',{secretFingerprint,hasSecret:Boolean(secret),timestampPresent:Boolean(req.headers['x-fm-timestamp']),signaturePresent:Boolean(req.headers['x-fm-signature'])});return json(res,401,{error:'unauthorized'},ts);}try{const round=Number(JSON.parse(raw).round);if(!Number.isInteger(round)||round<1||round>35)throw new Error('invalid_round');return json(res,200,{snapshot:await capture(round)},ts);}catch(error){const code=error instanceof Error?error.message:'connector_failed';console.error('connector_failed',{code,secretFingerprint});return json(res,code==='connector_auth_failed'?401:502,{error:code},ts);}});
-server.listen(port,()=>console.log(`connector listening on ${port}`,{secretFingerprint,hasSecret:Boolean(secret)}));
+server.listen(port,()=>{console.log(`connector listening on ${port}`,{secretFingerprint,hasSecret:Boolean(secret)});traceDom().catch(error=>console.error('fantacalcio_dom_trace_failed',{code:error instanceof Error?error.message:String(error)}));});
