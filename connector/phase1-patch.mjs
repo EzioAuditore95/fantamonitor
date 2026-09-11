@@ -1,10 +1,12 @@
-import { EventEmitter } from 'node:events';
 const originalFetch=globalThis.fetch.bind(globalThis);
+const originalEntries=Object.entries;
 const ASSET_BASE='https://d2lhpso9w1g8dk.cloudfront.net/web/risorse';
 function asset(kind,file){return typeof file==='string'&&file.trim()?`${ASSET_BASE}/${kind}_2026/${file.trim()}`:undefined;}
 function roleName(value){const raw=Array.isArray(value)?value[0]:value;if(typeof raw==='string'&&raw.trim())return raw.trim();return ({1:'P',2:'D',3:'C',4:'A'})[Number(raw)];}
 function player(p){if(!p||typeof p!=='object')return null;const name=typeof p.plyr==='string'?p.plyr.trim():'';const id=Number(p.pid);if(!name||!Number.isInteger(id))return null;return {id,name,role:roleName(p.role)};}
-function enrichTeam(t){if(!t||typeof t!=='object')return t;return {...t,manager:typeof t.nu==='string'?t.nu:undefined,budget:Number.isFinite(Number(t.crs))?Number(t.crs):undefined,crest:asset('squadra',t.l),kit:asset('maglietta',t.ms)};}
+function teamLike(t){return Boolean(t&&typeof t==='object'&&Number.isInteger(Number(t.id))&&typeof t.n==='string'&&typeof t.nu==='string'&&Object.prototype.hasOwnProperty.call(t,'crs')&&Object.prototype.hasOwnProperty.call(t,'l'));}
+function enrichTeam(t){if(!teamLike(t))return t;return {...t,manager:t.nu,budget:Number(t.crs),crest:asset('squadra',t.l),kit:asset('maglietta',t.ms)};}
+Object.entries=function(value){const base=originalEntries(value);if(!teamLike(value))return base;return base.concat([['manager',value.nu],['budget',Number(value.crs)],['crest',asset('squadra',value.l)],['kit',asset('maglietta',value.ms)]]);};
 function teamEndpoint(url){return /\/onboarding\/v1\/league\/(?:competition\/)?teams(?:\?|$)/.test(url)||/\/onboarding\/v1\/league\/teams\/my(?:\?|$)/.test(url);}
 function enrichPayload(url,j){
  if(/\/onboarding\/v1\/league\/(?:competition\/)?teams(?:\?|$)/.test(url)){if(Array.isArray(j?.data))j.data=j.data.map(enrichTeam);return j;}
@@ -21,21 +23,6 @@ function enrichPayload(url,j){
  }
  return j;
 }
-const originalEmit=EventEmitter.prototype.emit;
-EventEmitter.prototype.emit=function(event,...args){
- if(event==='response'){
-   const response=args[0];
-   try{
-     const url=response?.url?.();
-     if(url&&teamEndpoint(url)&&typeof response.json==='function'&&!response.__fmPhase1Patched){
-       const originalJson=response.json.bind(response);
-       Object.defineProperty(response,'__fmPhase1Patched',{value:true});
-       Object.defineProperty(response,'json',{configurable:true,value:async()=>enrichPayload(url,await originalJson())});
-     }
-   }catch{}
- }
- return originalEmit.call(this,event,...args);
-};
 globalThis.fetch=async function(input,init){
  const response=await originalFetch(input,init);
  const url=typeof input==='string'?input:input instanceof URL?input.href:input?.url||response.url;
