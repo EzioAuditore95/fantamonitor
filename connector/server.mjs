@@ -15,6 +15,7 @@ const telegramChatId=process.env.TELEGRAM_CHAT_ID||'';
 const telegramThreadId=process.env.TELEGRAM_THREAD_ID||'';
 const telegramAdminChatId=process.env.TELEGRAM_ADMIN_CHAT_ID||'';
 const publicUrl=(process.env.CONNECTOR_PUBLIC_URL||'https://fantamonitor-connector-production.up.railway.app').replace(/\/$/,'');
+const appUrl=(process.env.FANTAMONITOR_PUBLIC_URL||'https://fantamonitor-production.up.railway.app').replace(/\/$/,'');
 const telegramWebhookSecret=telegramBotToken?crypto.createHash('sha256').update(telegramBotToken).digest('hex').slice(0,48):'';
 const league='chefantavitae10',competition='337500';
 const teams=['AC Idovalproico','Atletico Fontanelle','FC LBVLA','FC SEMINI','FC Villaggio Mau Mau','FDS Sballo','I PIPPISTRELLI','Pro Spritz','Real Hasbulla','Salamandre'];
@@ -59,7 +60,9 @@ function buildTelegramMessage(snapshot,checkpoint='LIVE'){
   if(!missing.length)lines.push(checkpoint==='T+5m'?'Situazione finale: tutte le squadre hanno inserito la formazione.':'Tutte le squadre hanno inserito la formazione.');else lines.push(`Squadre senza formazione (${missing.length}):`,...missing.map(n=>`• ${n}`));
   lines.push('',`Aggiornato: ${new Intl.DateTimeFormat('it-IT',{timeZone:'Europe/Rome',hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'}).format(new Date(snapshot.observed_at))}`);return lines.join('\n');
 }
-const telegramKeyboard={inline_keyboard:[[{text:'Aggiorna stato',callback_data:'status'},{text:'Sincronizza ora',callback_data:'sync'}],[{text:'Apri FANTAMONITOR',url:'https://fantamonitor-production.up.railway.app'}]]};
+function buildMissingMessage(snapshot){const missing=snapshot.teams.filter(t=>!t.present).map(t=>t.name);return missing.length?`Giornata ${snapshot.round} — senza formazione (${missing.length})\n${missing.map(n=>`• ${n}`).join('\n')}`:`Giornata ${snapshot.round} — nessuna squadra mancante.`;}
+function buildNextMessage(info){if(!info?.start_at)return 'Nessuna prossima giornata disponibile nel calendario.';const when=new Intl.DateTimeFormat('it-IT',{timeZone:'Europe/Rome',weekday:'short',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).format(new Date(info.start_at));return `Prossima giornata monitorata: ${info.round}\nInizio: ${when}`;}
+const telegramKeyboard={inline_keyboard:[[{text:'Aggiorna stato',callback_data:'status'},{text:'Sincronizza ora',callback_data:'sync'}],[{text:'Prossima giornata',callback_data:'next'},{text:'Statistiche',url:`${appUrl}/stats`}],[{text:'Apri FANTAMONITOR',url:appUrl}]]};
 async function telegramApi(method,payload){if(!telegramBotToken)throw new Error('telegram_not_configured');const r=await fetch(`https://api.telegram.org/bot${telegramBotToken}/${method}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(10000)});const text=await r.text();let data=null;try{data=JSON.parse(text);}catch{}if(!r.ok||!data?.ok)throw new Error(`telegram_${method}_${r.status}:${String(data?.description||text).slice(0,180)}`);return data.result;}
 async function notifyAdmin(text){if(!telegramAdminChatId)return;await telegramApi('sendMessage',{chat_id:telegramAdminChatId,text:`FANTAMONITOR — errore tecnico\n${text}`}).catch(()=>{});}
 async function publishTelegramStatus(snapshot,checkpoint,{force=false}={}){
@@ -74,14 +77,27 @@ async function publishTelegramStatus(snapshot,checkpoint,{force=false}={}){
 async function currentRound(){const day=Number(await rpc('fm_current_round_for_bot',{access_key:autoSyncSecret}));if(!Number.isInteger(day)||day<1||day>35)throw new Error('current_round_unavailable');return day;}
 function telegramUpdateAuthorized(update){const ids=[];if(update.callback_query?.message?.chat?.id!=null)ids.push(String(update.callback_query.message.chat.id));for(const k of ['message','channel_post'])if(update[k]?.chat?.id!=null)ids.push(String(update[k].chat.id));return ids.some(id=>id===String(telegramChatId)||telegramAdminChatId&&id===String(telegramAdminChatId));}
 async function executeTelegramAction(action){const round=await currentRound();const snapshot=await capture(round);if(action==='sync')await rpc('fm_bot_import_snapshot',{access_key:autoSyncSecret,sample:snapshot});const published=await publishTelegramStatus(snapshot,'LIVE',{force:true});return {round,snapshot,published};}
+async function sendNext(chatId){const info=await rpc('fm_next_round_for_bot',{access_key:autoSyncSecret});await telegramApi('sendMessage',{chat_id:chatId,text:buildNextMessage(info),reply_markup:{inline_keyboard:[[{text:'Apri FANTAMONITOR',url:appUrl}]]}});}
 async function handleTelegramUpdate(update){
   if(!telegramUpdateAuthorized(update))return;
-  const callback=update.callback_query;if(callback){try{await telegramApi('answerCallbackQuery',{callback_query_id:callback.id,text:callback.data==='sync'?'Sincronizzazione avviata':'Aggiornamento avviato'});await executeTelegramAction(callback.data==='sync'?'sync':'status');}catch(e){console.error('telegram_callback_failed',{error:String(e)});await notifyAdmin(String(e));}return;}
-  const msg=update.message||update.channel_post;const text=String(msg?.text||'').split('@')[0].trim().toLowerCase();if(!['/status','/sync','/help'].includes(text))return;
-  if(text==='/help'){await telegramApi('sendMessage',{chat_id:msg.chat.id,text:'Comandi disponibili:\n/status — legge lo stato attuale\n/sync — forza lettura e salvataggio\n/help — mostra i comandi'});return;}
-  try{const result=await executeTelegramAction(text==='/sync'?'sync':'status');if(String(msg.chat.id)!==String(telegramChatId))await telegramApi('sendMessage',{chat_id:msg.chat.id,text:buildTelegramMessage(result.snapshot,'LIVE')});}catch(e){console.error('telegram_command_failed',{error:String(e)});await notifyAdmin(String(e));}
+  const callback=update.callback_query;
+  if(callback){
+    try{
+      if(callback.data==='next'){await telegramApi('answerCallbackQuery',{callback_query_id:callback.id,text:'Calendario aggiornato'});await sendNext(callback.message.chat.id);return;}
+      await telegramApi('answerCallbackQuery',{callback_query_id:callback.id,text:callback.data==='sync'?'Sincronizzazione avviata':'Aggiornamento avviato'});await executeTelegramAction(callback.data==='sync'?'sync':'status');
+    }catch(e){console.error('telegram_callback_failed',{error:String(e)});await notifyAdmin(String(e));}
+    return;
+  }
+  const msg=update.message||update.channel_post;const text=String(msg?.text||'').split('@')[0].trim().toLowerCase();if(!['/status','/missing','/next','/sync','/stats','/help'].includes(text))return;
+  if(text==='/help'){await telegramApi('sendMessage',{chat_id:msg.chat.id,text:'Comandi disponibili:\n/status — stato attuale\n/missing — sole squadre mancanti\n/next — prossima giornata e orario\n/sync — forza lettura e salvataggio\n/stats — apre le statistiche web\n/help — mostra i comandi'});return;}
+  if(text==='/next'){await sendNext(msg.chat.id);return;}
+  if(text==='/stats'){await telegramApi('sendMessage',{chat_id:msg.chat.id,text:'Statistiche FANTAMONITOR',reply_markup:{inline_keyboard:[[{text:'Apri statistiche',url:`${appUrl}/stats`}]]}});return;}
+  try{
+    if(text==='/missing'){const round=await currentRound();const snapshot=await capture(round);await publishTelegramStatus(snapshot,'LIVE',{force:true});if(String(msg.chat.id)!==String(telegramChatId))await telegramApi('sendMessage',{chat_id:msg.chat.id,text:buildMissingMessage(snapshot)});return;}
+    const result=await executeTelegramAction(text==='/sync'?'sync':'status');if(String(msg.chat.id)!==String(telegramChatId))await telegramApi('sendMessage',{chat_id:msg.chat.id,text:buildTelegramMessage(result.snapshot,'LIVE')});
+  }catch(e){console.error('telegram_command_failed',{error:String(e)});await notifyAdmin(String(e));}
 }
-async function configureTelegramWebhook(){if(!telegramBotToken||!telegramChatId)return;await telegramApi('setWebhook',{url:`${publicUrl}/telegram/webhook`,secret_token:telegramWebhookSecret,allowed_updates:['message','channel_post','callback_query'],drop_pending_updates:false});await telegramApi('setMyCommands',{commands:[{command:'status',description:'Stato formazioni'},{command:'sync',description:'Forza sincronizzazione'},{command:'help',description:'Comandi disponibili'}]}).catch(()=>{});console.info('telegram_webhook_configured',{url:`${publicUrl}/telegram/webhook`});}
+async function configureTelegramWebhook(){if(!telegramBotToken||!telegramChatId)return;await telegramApi('setWebhook',{url:`${publicUrl}/telegram/webhook`,secret_token:telegramWebhookSecret,allowed_updates:['message','channel_post','callback_query'],drop_pending_updates:false});await telegramApi('setMyCommands',{commands:[{command:'status',description:'Stato formazioni'},{command:'missing',description:'Squadre senza formazione'},{command:'next',description:'Prossima giornata'},{command:'sync',description:'Forza sincronizzazione'},{command:'stats',description:'Statistiche web'},{command:'help',description:'Comandi disponibili'}]}).catch(()=>{});console.info('telegram_webhook_configured',{url:`${publicUrl}/telegram/webhook`});}
 
 async function runAutoSync(){
   const claim=await rpc('fm_claim_due_auto_sync',{access_key:autoSyncSecret});if(!claim)return {status:'no_due_checkpoint'};const round=Number(claim.round),checkpoint=String(claim.checkpoint);
