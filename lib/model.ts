@@ -26,13 +26,23 @@ const teamSchema=z.object({
   formation:formationSchema.optional(),
 }).strict();
 
+const competitionMatchSchema=z.object({
+  homeId:z.number().int().positive(),awayId:z.number().int().positive(),home:z.string().min(1),away:z.string().min(1),
+  homeFantasy:z.number().nullable(),awayFantasy:z.number().nullable(),homeStandingPoints:z.number().nullable(),awayStandingPoints:z.number().nullable(),
+  homeGoals:z.number().int().nullable(),awayGoals:z.number().int().nullable(),result:z.string().nullable(),resultSR:z.string().nullable(),
+}).strict();
+const competitionRoundSchema=z.object({round:z.number().int().min(1).max(35),championshipRound:z.number().int().min(1).max(38),calculated:z.boolean(),matches:z.array(competitionMatchSchema).length(5)}).strict();
+const resultMatchSchema=z.object({round:z.number().int().min(1).max(35),home:z.string(),away:z.string(),homeGoals:z.number().int(),awayGoals:z.number().int(),homeFantasy:z.number().nullable(),awayFantasy:z.number().nullable()}).strict();
+const standingSchema=z.object({name:z.string(),played:z.number().int().min(0),wins:z.number().int().min(0),draws:z.number().int().min(0),losses:z.number().int().min(0),goalsFor:z.number().int().min(0),goalsAgainst:z.number().int().min(0),points:z.number(),fantasyTotal:z.number()}).strict();
+export const competitionSchema=z.object({source:z.string().url(),fetchedAt:z.string().datetime({offset:true}),calendar:z.array(competitionRoundSchema).length(35),matches:z.array(resultMatchSchema),standings:z.array(standingSchema).length(10),warnings:z.array(z.string())}).strict();
+
 export const snapshotSchema = z.object({
   schema_version: z.literal(1), league:z.literal('chefantavitae10'),
   season:z.literal('2026-2027'), competition_id:z.literal('337500'),
   round:z.number().int().min(1).max(35), observed_at:z.string().datetime({offset:true}),
   source:z.literal('authenticated_ui'),source_url:z.string().url(),
   expected_total:z.literal(10),inserted:z.number().int().min(0).max(10),
-  teams:z.array(teamSchema).length(10),
+  teams:z.array(teamSchema).length(10),competition:competitionSchema.optional(),
 }).strict().superRefine((s,ctx)=>{
   const bad=(message:string)=>ctx.addIssue({code:z.ZodIssueCode.custom,message});
   const url=new URL(s.source_url);
@@ -42,9 +52,13 @@ export const snapshotSchema = z.object({
     if(!TEAM_NAMES.includes(t.name)||t.team_key!==t.name)bad('Elenco squadre diverso da quello della lega.');
     if(t.source_status!==(t.present?'check-circle':'Non inserita'))bad('Indicatore di formazione incoerente.');
   }
+  if(s.competition){
+    for(const r of s.competition.calendar)for(const m of r.matches)if(!TEAM_NAMES.includes(m.home)||!TEAM_NAMES.includes(m.away))bad('Calendario con squadre non appartenenti alla lega.');
+  }
   if(s.teams.filter(t=>t.present).length!==s.inserted)bad('Il conteggio non coincide con le squadre.');
   if(Date.parse(s.observed_at)>Date.now()+60000)bad('La lettura ha una data futura.');
 });
+export type Competition=z.infer<typeof competitionSchema>;
 export type Snapshot=z.infer<typeof snapshotSchema>;
 export type TeamSnapshot=Snapshot['teams'][number];
 export type Archive={canManage?:boolean;reviews:Review[];snapshots:Snapshot[]; events:{team_key:string;round:number;source_label:string;source_time_text:string;source_url:string}[]};
