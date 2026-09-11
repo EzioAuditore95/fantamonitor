@@ -19,7 +19,14 @@ async function capture(round) {
     await page.goto('https://leghe.fantacalcio.it/login',{waitUntil:'domcontentloaded',timeout:20000});
     await page.locator('input[placeholder="Username"],input[autocomplete="username"]').first().fill(username);
     await page.locator('input[placeholder="Password"],input[autocomplete="current-password"]').first().fill(password);
-    await page.getByRole('button',{name:'LOGIN'}).click(); await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('button',{name:'LOGIN'}).click();
+    // The login is handled asynchronously by the site.  Do not navigate to
+    // the league until the redirect/cookies have settled.
+    await Promise.race([
+      page.waitForURL(u => !/\/login(?:\/|$)/i.test(new URL(u).pathname), { timeout: 15000 }),
+      page.waitForTimeout(3000),
+    ]);
+    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
     const url=`https://leghe.fantacalcio.it/${league}/view/competition/${competition}/manage-lineups/${round}`;
     await page.goto(url,{waitUntil:'networkidle',timeout:30000});
     const currentUrl = page.url();
