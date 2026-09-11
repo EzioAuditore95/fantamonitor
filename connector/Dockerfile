@@ -4,7 +4,7 @@ WORKDIR /app
 COPY package.json ./
 RUN npm install --omit=dev
 COPY server.mjs ./
-COPY diagnose-phase1.mjs ./
+COPY phase1-patch.mjs ./
 
 ENV NODE_ENV=production
 CMD ["npm", "start"]
