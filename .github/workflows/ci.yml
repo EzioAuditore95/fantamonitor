@@ -1,7 +1,7 @@
 name: Validate FANTAMONITOR
 on:
   push:
-    branches: [main]
+    branches: [main, deploy/vercel-supabase]
   pull_request:
 permissions:
   contents: read
@@ -20,7 +20,7 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: node --test prototype/tests/collector.test.mjs
-      - run: node --experimental-strip-types --test tests/penalties.test.mjs
+      - run: npm test
       - run: python -m unittest discover -s tests -v
         working-directory: prototype
       - run: npm run build

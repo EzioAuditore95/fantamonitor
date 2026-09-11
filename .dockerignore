@@ -1,0 +1,10 @@
+.git
+node_modules
+.next
+.env*
+!.env.example
+prototype/data
+lib/data
+*.sqlite*
+.wrangler
+.sites-runtime
