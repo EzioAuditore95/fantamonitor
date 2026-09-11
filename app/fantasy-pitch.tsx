@@ -1,5 +1,6 @@
 'use client';
 
+import type { CSSProperties } from 'react';
 import type { TeamSnapshot } from '@/lib/model';
 import styles from './fantasy-pitch.module.css';
 
@@ -12,9 +13,6 @@ type Props={
   kitUrl?:string;
   teamName?:string;
 };
-
-const roleOrder=['P','D','C','A'];
-const roleLabel:Record<string,string>={P:'P',D:'D',C:'C',A:'A'};
 
 function parseModule(module?:string){
   const digits=String(module??'').replace(/\D/g,'').split('').map(Number).filter(n=>Number.isInteger(n)&&n>0);
@@ -82,7 +80,8 @@ function FallbackShirt({role}:{role?:string}){
 }
 
 function PitchPlayer({player,kitUrl}:{player:PositionedPlayer;kitUrl?:string}){
-  return <div className={styles.player} style={{left:`${player.x}%`,top:`${player.y}%`,'--depth':player.depth} as React.CSSProperties}>
+  const style={left:`${player.x}%`,top:`${player.y}%`,'--depth':player.depth} as CSSProperties;
+  return <div className={styles.player} style={style}>
     <div className={styles.shirtWrap}>
       {kitUrl?<img src={kitUrl} alt="" className={styles.shirt}/>:<FallbackShirt role={player.role}/>} 
     </div>
