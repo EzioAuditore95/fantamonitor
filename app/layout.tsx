@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "./glass.css";
 import "./glass-refinement.css";
+import GlobalBottomNav from "./global-bottom-nav";
 
 export const metadata: Metadata = {
   title: "FANTAMONITOR · CheFantaVitaE10",
@@ -19,7 +20,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="it">
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">{children}<GlobalBottomNav/></body>
     </html>
   );
 }
