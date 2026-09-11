@@ -1,6 +1,7 @@
 'use client';
 import type { TeamSnapshot, Snapshot } from '@/lib/model';
 import { displayDate } from '@/lib/model';
+import FantasyPitch from './fantasy-pitch';
 import { CheckCircle2, Clock3, Info, ShieldCheck, Shirt, UserRound } from 'lucide-react';
 
 type EventRow={team_key:string;round:number;source_label:string;source_time_text:string;source_url:string};
@@ -11,26 +12,10 @@ const roleLabels:Record<string,string>={P:'Portieri',D:'Difensori',C:'Centrocamp
 
 function statusLabel(present:boolean|undefined){return present===undefined?'Nessuna lettura':present?'Formazione inserita':'Formazione non inserita'}
 function StatusPill({present}:{present:boolean|undefined}){return <span className={'team-detail-status '+(present===undefined?'unknown':present?'present':'absent')}>{present===undefined?<Info/>:present?<CheckCircle2/>:<Clock3/>}{statusLabel(present)}</span>}
-function formatModule(module?:string){if(!module)return '';return /^\d{3,4}$/.test(module)?module.split('').join('-'):module}
 function byRole(players:Player[]|undefined,role:string){return (players??[]).filter(p=>p.role===role)}
 
 function PlayerChip({player,compact=false}:{player:Player;compact?:boolean}){
   return <div className={'player-chip '+(compact?'compact':'')}><span className="player-role">{player.role||'–'}</span><span className="player-name">{player.name}</span></div>
-}
-
-function Pitch({team}:{team:TeamSnapshot}){
-  const starters=team.formation?.starters??[];
-  if(!starters.length)return <div className="team-empty">Schieramento non disponibile per questa giornata.</div>;
-  return <div className="formation-card">
-    <div className="formation-card-head"><div><span>FORMAZIONE</span><strong>{formatModule(team.formation?.module)||'Modulo'}</strong></div><small>{starters.length} titolari</small></div>
-    <div className="pitch" aria-label={`Formazione ${team.name}`}>
-      <div className="pitch-line pitch-attack">{byRole(starters,'A').map(p=><PlayerChip key={String(p.id??p.name)} player={p}/>)}</div>
-      <div className="pitch-line pitch-midfield">{byRole(starters,'C').map(p=><PlayerChip key={String(p.id??p.name)} player={p}/>)}</div>
-      <div className="pitch-line pitch-defense">{byRole(starters,'D').map(p=><PlayerChip key={String(p.id??p.name)} player={p}/>)}</div>
-      <div className="pitch-line pitch-goalkeeper">{byRole(starters,'P').map(p=><PlayerChip key={String(p.id??p.name)} player={p}/>)}</div>
-    </div>
-    {!!team.formation?.bench?.length&&<div className="bench-block"><div className="section-kicker">Panchina</div><div className="bench-scroll">{team.formation.bench.map(p=><PlayerChip compact key={String(p.id??p.name)} player={p}/>)}</div></div>}
-  </div>
 }
 
 function Roster({players}:{players:Player[]}){
@@ -49,7 +34,9 @@ export default function TeamDetail({team,round,readings,events}:{team?:TeamSnaps
       {team.kit_url&&<div className="team-kit"><Shirt/><img src={team.kit_url} alt={`Maglia ${team.name}`}/></div>}
     </section>
 
-    <Pitch team={team}/>
+    <FantasyPitch module={team.formation?.module} starters={team.formation?.starters??[]} kitUrl={team.kit_url} teamName={team.name}/>
+
+    {!!team.formation?.bench?.length&&<section className="team-detail-section"><div className="section-heading"><div><span className="section-kicker">PANCHINA</span><h3>{team.formation.bench.length} giocatori</h3></div></div><div className="bench-scroll">{team.formation.bench.map(p=><PlayerChip compact key={String(p.id??p.name)} player={p}/>)}</div></section>}
 
     {!!team.formation?.roster?.length&&<Roster players={team.formation.roster}/>} 
 
