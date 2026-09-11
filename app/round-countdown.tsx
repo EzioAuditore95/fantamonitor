@@ -34,14 +34,12 @@ export default function RoundCountdown(){
   const next=useMemo(()=>rows.filter(r=>r.start_at&&Date.parse(r.start_at)>now).sort((a,b)=>Date.parse(a.start_at!)-Date.parse(b.start_at!))[0]??null,[rows,now]);
   if(!target||!next?.start_at)return null;
   const remaining=Date.parse(next.start_at)-now;
-  const style:React.CSSProperties={display:'flex',alignItems:'center',gap:10,marginLeft:'auto',padding:'8px 12px',border:'1px solid rgba(255,255,255,.16)',borderRadius:12,background:'rgba(255,255,255,.06)',minWidth:220};
-  const iconStyle:React.CSSProperties={width:30,height:30,borderRadius:9,display:'grid',placeItems:'center',background:'rgba(255,255,255,.08)',flex:'0 0 auto'};
-  return createPortal(<div style={style} title={`Serie A ${next.serie_a_round}ª giornata · ${formatKickoff(next.start_at)}`}>
-    <span style={iconStyle}><Clock3 size={16}/></span>
-    <span style={{display:'flex',flexDirection:'column',lineHeight:1.15}}>
-      <span style={{fontSize:11,opacity:.72,fontWeight:700,textTransform:'uppercase',letterSpacing:'.06em'}}>Giornata {next.round} · inizio tra</span>
-      <strong style={{fontSize:16,fontVariantNumeric:'tabular-nums'}}>{formatRemaining(remaining)}</strong>
-      <span style={{fontSize:11,opacity:.72}}>{formatKickoff(next.start_at)}</span>
+  return createPortal(<div className="round-countdown" title={`Serie A ${next.serie_a_round}ª giornata · ${formatKickoff(next.start_at)}`}>
+    <span className="round-countdown__icon"><Clock3 size={17}/></span>
+    <span className="round-countdown__content">
+      <span className="round-countdown__label">Giornata {next.round} · inizio tra</span>
+      <strong className="round-countdown__value">{formatRemaining(remaining)}</strong>
+      <span className="round-countdown__date">{formatKickoff(next.start_at)}</span>
     </span>
   </div>,target);
 }
