@@ -18,16 +18,12 @@ async function capture(round, trace=false) {
   const browser=await chromium.launch({headless:true}); const page=await browser.newPage();
   try {
     if (trace) {
-      page.on('request', req => {
-        const u=req.url();
-        if (/fantacalcio\.it/i.test(u) && (req.resourceType()==='xhr' || req.resourceType()==='fetch')) {
-          console.info('fantacalcio_api_request', { method:req.method(), resourceType:req.resourceType(), url:u });
-        }
-      });
       page.on('response', async response => {
-        const req=response.request(); const u=response.url();
-        if (/fantacalcio\.it/i.test(u) && (req.resourceType()==='xhr' || req.resourceType()==='fetch')) {
-          console.info('fantacalcio_api_response', { status:response.status(), resourceType:req.resourceType(), url:u, contentType:response.headers()['content-type']||'' });
+        const u=response.url();
+        if (/\/gaming\/v1\/lineup\/notcalculated\//.test(u) || /\/gaming\/v1\/teamLineup\/visualizza\//.test(u) || /\/onboarding\/v1\/league\/competition\/teams/.test(u)) {
+          let body='';
+          try { body=(await response.text()).slice(0,20000); } catch {}
+          console.info('fantacalcio_target_response', { status:response.status(), url:u, body });
         }
       });
     }
