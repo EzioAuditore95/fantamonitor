@@ -13,12 +13,14 @@ try{
  await page.locator('input[placeholder="Password"],input[autocomplete="current-password"]').first().fill(password);
  await page.getByRole('button',{name:'LOGIN'}).click();
  await Promise.race([page.waitForURL(u=>!/\/login(?:\/|$)/i.test(new URL(u).pathname),{timeout:15000}),page.waitForTimeout(3000)]);
- await page.goto(`https://leghe.fantacalcio.it/${league}/view/competition/${competition}/manage-lineups/${round}`,{waitUntil:'networkidle',timeout:30000});
+ await page.goto(`https://leghe.fantacalcio.it/${league}/view/competition/${competition}/manage-lineups/${round}?team=12420064`,{waitUntil:'networkidle',timeout:30000});
  await page.waitForTimeout(2500);
  console.log('PHASE1_DIAGNOSTIC_START');
  for(const x of seen){if(/team|lineup|rose|rosa|market|competition|calendar|match|squad/i.test(x.url))console.log(JSON.stringify({url:x.url,shape:x.shape}));}
  const teamsPayload=seen.find(x=>/\/onboarding\/v1\/league\/competition\/teams/.test(x.url))?.json;
- const sample=teamsPayload?.data?.[0];
- if(sample)console.log('PHASE1_TEAM_SAMPLE',JSON.stringify({n:sample.n,nu:sample.nu,cri:sample.cri,crs:sample.crs,cr:sample.cr,l:sample.l,cal:sample.cal,cs:sample.cs,m:sample.m,ms:sample.ms,st:sample.st,lm:sample.lm,mm:sample.mm}));
+ const sample=teamsPayload?.data?.find(x=>x.id===12420064)||teamsPayload?.data?.[0];
+ if(sample)console.log('PHASE1_TEAM_SAMPLE',JSON.stringify({n:sample.n,nu:sample.nu,cri:sample.cri,crs:sample.crs,cr:sample.cr,l:sample.l,m:sample.m,ms:sample.ms}));
+ const imgs=await page.locator('img').evaluateAll(nodes=>nodes.map(n=>({src:n.src,alt:n.alt||''})).filter(x=>/12420064|0927232|09184733/i.test(x.src+x.alt)));
+ console.log('PHASE1_ASSET_URLS',JSON.stringify(imgs));
  console.log('PHASE1_DIAGNOSTIC_END');
 }finally{await browser.close();}
