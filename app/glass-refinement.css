@@ -1,0 +1,141 @@
+/* FANTAMONITOR — contrast pass and dashboard simplification */
+
+:root {
+  --fm-text: #f7f9ff;
+  --fm-text-soft: #d9e2f1;
+  --fm-muted: #b8c4d8;
+  --fm-muted-strong: #c7d2e3;
+}
+
+/* Remove secondary explanatory blocks from the dashboard. */
+.score-aside,
+.method {
+  display: none !important;
+}
+
+/* The scoreboard becomes a single, full-width hero card. */
+.scoreboard,
+@media (min-width: 700px) {
+  .scoreboard {
+    display: block !important;
+    grid-template-columns: none !important;
+  }
+}
+
+/* Increase contrast of all secondary copy on dark glass surfaces. */
+.muted,
+.sync-note,
+.season,
+.footnote,
+.team-accounting,
+.panel-head small,
+.round-countdown__label,
+.round-countdown__date,
+.side-stack p,
+.timeline-row p,
+.fixture span,
+.import-note,
+.drawer p,
+[data-slot=dialog-description],
+[data-slot=sheet-description] {
+  color: var(--fm-muted) !important;
+}
+
+/* Primary readable copy. */
+.panel,
+.panel p,
+.panel li,
+.panel button,
+.panel a,
+.timeline-row,
+.fixture,
+.number-card,
+.blank-panel,
+.drawer,
+[data-slot=dialog-content],
+[data-slot=sheet-content] {
+  color: var(--fm-text-soft);
+}
+
+.panel h1,
+.panel h2,
+.panel h3,
+.panel strong,
+.timeline-row strong,
+.fixture strong,
+.number-card strong,
+.blank-panel [data-slot=empty-title],
+.drawer h2,
+.drawer h3,
+[data-slot=dialog-title],
+[data-slot=sheet-title] {
+  color: var(--fm-text) !important;
+}
+
+/* Old utility colors were designed for a light theme and are too dark here. */
+.text-muted-foreground,
+.text-secondary-foreground {
+  color: var(--fm-muted) !important;
+}
+
+/* Table and history readability. */
+.team-table td,
+.matrix td,
+.matrix th,
+.mobile-history-row,
+.timeline-count,
+.waiting-list button {
+  color: var(--fm-text-soft);
+}
+
+.team-table th,
+.matrix th {
+  color: var(--fm-muted-strong) !important;
+}
+
+.team-name strong,
+.mobile-history-row strong,
+.waiting-list button {
+  color: var(--fm-text) !important;
+}
+
+/* Preserve semantic colors while keeping sufficient luminance. */
+.detail-button,
+.aside-row a,
+.event-box a,
+.timeline-row a {
+  color: #8fbcff !important;
+}
+
+.warning-icon {
+  color: #ffc27d !important;
+}
+
+.badge.present {
+  color: #c8ffe1 !important;
+}
+
+.badge.absent {
+  color: #ffe0b8 !important;
+}
+
+.badge.unknown {
+  color: #d3dced !important;
+}
+
+/* Footer was inherited from the original light UI. */
+.bottom-bar {
+  color: var(--fm-muted) !important;
+  border-color: rgba(255,255,255,.09) !important;
+}
+
+/* The remaining warning panel should not look like a second-column note stack on mobile. */
+.side-stack .panel {
+  color: var(--fm-text-soft);
+}
+
+@media (min-width: 700px) {
+  .monitor-grid {
+    grid-template-columns: minmax(0, 1fr) 280px;
+  }
+}
