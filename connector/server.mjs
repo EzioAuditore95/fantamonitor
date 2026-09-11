@@ -132,7 +132,7 @@ function toTeamStatus(item,round){
     team_key:item.team.name,
     name:item.team.name,
     present,
-    source_status:present?'Inserita':'Non inserita'
+    source_status:present?'check-circle':'Non inserita'
   };
 }
 
@@ -151,7 +151,7 @@ async function capture(round){
     competition_id:competition,
     round,
     observed_at,
-    source:'authenticated_api',
+    source:'authenticated_ui',
     source_url:`https://leghe.fantacalcio.it/${league}/view/competition/${competition}/manage-lineups/${round}`,
     expected_total:teams.length,
     inserted:teamsData.filter(t=>t.present).length,
