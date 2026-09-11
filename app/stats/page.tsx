@@ -1,122 +1,73 @@
 'use client';
 
 import { useEffect,useMemo,useState } from 'react';
-import { ArrowLeft,BarChart3,Clock3,TriangleAlert } from 'lucide-react';
-import { TEAM_NAMES,type Archive,type Snapshot } from '@/lib/model';
+import { ArrowLeft,BarChart3,Clock3,TriangleAlert,Activity,Trophy,TrendingDown,Target,Shield,Flame,Scale,ChartNoAxesCombined,Gauge,Swords,Crown } from 'lucide-react';
+import { TEAM_NAMES,TEAM_COLORS,initials,type Archive,type Snapshot } from '@/lib/model';
+import { computePerformance,classifyTeam,type PerformancePayload,type TeamPerformance,type MatchResult } from '@/lib/performance';
+import styles from './stats.module.css';
 
 type ScheduleRow={round:number;start_at:string|null};
 type ScheduleResponse={schedule:ScheduleRow[];error?:string};
+type TeamStat={name:string;observedRounds:number;finalMissing:number;firstObservedPresent:number;missingNearDeadline:number;samplesNearDeadline:number;avgFirstPresenceMinutes:number|null;};
 
-type TeamStat={
-  name:string;
-  observedRounds:number;
-  finalMissing:number;
-  firstObservedPresent:number;
-  missingNearDeadline:number;
-  samplesNearDeadline:number;
-  avgFirstPresenceMinutes:number|null;
-};
+function latestByRound(snapshots:Snapshot[]){const map=new Map<number,Snapshot>();for(const snapshot of [...snapshots].sort((a,b)=>a.observed_at.localeCompare(b.observed_at)))map.set(snapshot.round,snapshot);return map;}
+function formatMinutes(value:number|null){if(value===null)return '—';if(value>=60)return `${(value/60).toFixed(value>=120?0:1)} h`;if(value<=-60)return `${(Math.abs(value)/60).toFixed(Math.abs(value)>=120?0:1)} h dopo`;if(value<0)return `${Math.abs(Math.round(value))} min dopo`;return `${Math.round(value)} min prima`;}
+function fmt(n:number,digits=1){return new Intl.NumberFormat('it-IT',{minimumFractionDigits:digits,maximumFractionDigits:digits}).format(n);}
+function Crest({name}:{name:string}){return <span className="crest" style={{backgroundColor:TEAM_COLORS[TEAM_NAMES.indexOf(name)]}}>{initials(name)}</span>}
+function Form({values}:{values:('W'|'D'|'L')[]}){return <div className={styles.form}>{values.map((v,i)=><span key={i} className={`${styles.result} ${v==='W'?styles.win:v==='D'?styles.draw:styles.loss}`}>{v}</span>)}</div>}
+function PerfCard({label,team,value,detail,icon}:{label:string;team?:TeamPerformance;value:string;detail:string;icon:React.ReactNode}){return <div className={styles.card}><div className={styles.cardTop}><span className={styles.miniLabel}>{label}</span><span className={styles.icon}>{icon}</span></div><div className={styles.metric}>{value}</div><div className={styles.team}>{team?.name??'—'}</div><div className={styles.detail}>{detail}</div>{team&&<Form values={team.recentForm}/>}</div>}
 
-function latestByRound(snapshots:Snapshot[]){
-  const map=new Map<number,Snapshot>();
-  for(const snapshot of [...snapshots].sort((a,b)=>a.observed_at.localeCompare(b.observed_at)))map.set(snapshot.round,snapshot);
-  return map;
-}
-
-function formatMinutes(value:number|null){
-  if(value===null)return '—';
-  if(value>=60)return `${(value/60).toFixed(value>=120?0:1)} h`;
-  if(value<=-60)return `${(Math.abs(value)/60).toFixed(Math.abs(value)>=120?0:1)} h dopo`;
-  if(value<0)return `${Math.abs(Math.round(value))} min dopo`;
-  return `${Math.round(value)} min prima`;
-}
+function teamMatchView(match:MatchResult,name:string){const home=match.home===name;return {opponent:home?match.away:match.home,gf:home?match.homeGoals:match.awayGoals,ga:home?match.awayGoals:match.homeGoals,fantasy:home?match.homeFantasy:match.awayFantasy,oppFantasy:home?match.awayFantasy:match.homeFantasy,points:(home?match.homeGoals:match.awayGoals)>(home?match.awayGoals:match.homeGoals)?3:(match.homeGoals===match.awayGoals?1:0)};}
 
 export default function StatsPage(){
-  const [archive,setArchive]=useState<Archive|null>(null);
-  const [schedule,setSchedule]=useState<ScheduleRow[]>([]);
-  const [loading,setLoading]=useState(true);
-  const [error,setError]=useState('');
+  const [archive,setArchive]=useState<Archive|null>(null),[schedule,setSchedule]=useState<ScheduleRow[]>([]),[performance,setPerformance]=useState<PerformancePayload|null>(null);
+  const [loading,setLoading]=useState(true),[error,setError]=useState(''),[performanceError,setPerformanceError]=useState('');
+  useEffect(()=>{let active=true;(async()=>{try{const [archiveRes,scheduleRes,performanceRes]=await Promise.all([fetch('/api/archive',{cache:'no-store'}),fetch('/api/schedule',{cache:'no-store'}),fetch('/api/performance',{cache:'no-store'})]);const archiveData=await archiveRes.json() as Archive&{error?:string};const scheduleData=await scheduleRes.json() as ScheduleResponse;const perfData=await performanceRes.json() as PerformancePayload&{error?:string};if(!archiveRes.ok)throw new Error(archiveData.error||'Archivio non disponibile.');if(!scheduleRes.ok)throw new Error(scheduleData.error||'Calendario non disponibile.');if(active){setArchive(archiveData);setSchedule(scheduleData.schedule??[]);if(performanceRes.ok)setPerformance(perfData);else setPerformanceError(perfData.error||'Performance non disponibili.');}}catch(e){if(active)setError(e instanceof Error?e.message:'Statistiche non disponibili.');}finally{if(active)setLoading(false);}})();return()=>{active=false};},[]);
 
-  useEffect(()=>{
-    let active=true;
-    (async()=>{
-      try{
-        const [archiveRes,scheduleRes]=await Promise.all([
-          fetch('/api/archive',{cache:'no-store'}),
-          fetch('/api/schedule',{cache:'no-store'}),
-        ]);
-        const archiveData=await archiveRes.json() as Archive & {error?:string};
-        const scheduleData=await scheduleRes.json() as ScheduleResponse;
-        if(!archiveRes.ok)throw new Error(archiveData.error||'Archivio non disponibile.');
-        if(!scheduleRes.ok)throw new Error(scheduleData.error||'Calendario non disponibile.');
-        if(active){setArchive(archiveData);setSchedule(scheduleData.schedule??[]);}
-      }catch(e){if(active)setError(e instanceof Error?e.message:'Statistiche non disponibili.');}
-      finally{if(active)setLoading(false);}
-    })();
-    return()=>{active=false};
-  },[]);
+  const lineupStats=useMemo<TeamStat[]>(()=>{if(!archive)return [];const byRound=new Map<number,Snapshot[]>();for(const s of archive.snapshots){const list=byRound.get(s.round)??[];list.push(s);byRound.set(s.round,list);}for(const list of byRound.values())list.sort((a,b)=>a.observed_at.localeCompare(b.observed_at));const starts=new Map(schedule.filter(x=>x.start_at).map(x=>[x.round,Date.parse(x.start_at as string)]));return TEAM_NAMES.map(name=>{let observedRounds=0,finalMissing=0,firstObservedPresent=0,missingNearDeadline=0,samplesNearDeadline=0;const firstPresenceLead:number[]=[];for(const [round,readings] of byRound){if(!readings.length)continue;observedRounds++;const latest=readings[readings.length-1].teams.find(t=>t.name===name);if(latest&&!latest.present)finalMissing++;const firstPresent=readings.find(s=>s.teams.find(t=>t.name===name)?.present);if(firstPresent){firstObservedPresent++;const start=starts.get(round);if(start!=null)firstPresenceLead.push((start-Date.parse(firstPresent.observed_at))/60000);}const start=starts.get(round);if(start!=null){const target=start-15*60*1000;const candidate=readings.reduce<Snapshot|null>((best,s)=>{const delta=Math.abs(Date.parse(s.observed_at)-target);if(delta>10*60*1000)return best;return !best||delta<Math.abs(Date.parse(best.observed_at)-target)?s:best;},null);if(candidate){samplesNearDeadline++;if(!candidate.teams.find(t=>t.name===name)?.present)missingNearDeadline++;}}}return {name,observedRounds,finalMissing,firstObservedPresent,missingNearDeadline,samplesNearDeadline,avgFirstPresenceMinutes:firstPresenceLead.length?firstPresenceLead.reduce((a,b)=>a+b,0)/firstPresenceLead.length:null};});},[archive,schedule]);
 
-  const stats=useMemo<TeamStat[]>(()=>{
-    if(!archive)return [];
-    const byRound=new Map<number,Snapshot[]>();
-    for(const s of archive.snapshots){const list=byRound.get(s.round)??[];list.push(s);byRound.set(s.round,list);}
-    for(const list of byRound.values())list.sort((a,b)=>a.observed_at.localeCompare(b.observed_at));
-    const starts=new Map(schedule.filter(x=>x.start_at).map(x=>[x.round,Date.parse(x.start_at as string)]));
+  const teams=useMemo(()=>performance?computePerformance(performance):[],[performance]);
+  const playedTeams=teams.filter(t=>t.played>0);
+  const bestForm=[...playedTeams].sort((a,b)=>b.formScore-a.formScore)[0],crisis=[...playedTeams].sort((a,b)=>a.formScore-b.formScore)[0];
+  const corto=[...playedTeams].filter(t=>t.wins).sort((a,b)=>b.closeWinRate-a.closeWinRate||b.narrowWins-a.narrowWins)[0];
+  const lucky=[...playedTeams].sort((a,b)=>b.luckDelta-a.luckDelta)[0],unlucky=[...playedTeams].sort((a,b)=>a.luckDelta-b.luckDelta)[0];
+  const drawKing=[...playedTeams].sort((a,b)=>b.drawRate-a.drawRate)[0],allOrNothing=[...playedTeams].sort((a,b)=>a.drawRate-b.drawRate)[0];
+  const consistent=[...playedTeams].sort((a,b)=>a.fantasyStdDev-b.fantasyStdDev)[0],volatile=[...playedTeams].sort((a,b)=>b.fantasyStdDev-a.fantasyStdDev)[0];
+  const bestAttack=[...playedTeams].sort((a,b)=>b.goalsFor-a.goalsFor)[0],bestDefense=[...playedTeams].sort((a,b)=>a.goalsAgainst-b.goalsAgainst)[0],bestFantasy=[...playedTeams].sort((a,b)=>b.fantasyAverage-a.fantasyAverage)[0];
+  const biggestWin=performance?.matches.reduce<MatchResult|null>((best,m)=>!best||Math.abs(m.homeGoals-m.awayGoals)>Math.abs(best.homeGoals-best.awayGoals)?m:best,null)??null;
+  const completed=performance?.matches??[];
+  const topHalf=new Set([...playedTeams].sort((a,b)=>b.points-a.points||b.fantasyAverage-a.fantasyAverage).slice(0,Math.ceil(playedTeams.length/2)).map(x=>x.name));
+  const versus=(name:string,predicate:(opponent:string)=>boolean)=>{const games=completed.filter(m=>m.home===name||m.away===name).map(m=>teamMatchView(m,name)).filter(g=>predicate(g.opponent));return {games:games.length,points:games.reduce((s,g)=>s+g.points,0),wins:games.filter(g=>g.points===3).length};};
+  const giantKillers=playedTeams.map(t=>{const v=versus(t.name,o=>topHalf.has(o)&&o!==t.name);return {team:t,score:v.games?v.points/v.games:0,wins:v.wins};}).sort((a,b)=>b.score-a.score||b.wins-a.wins);
+  const stompers=playedTeams.map(t=>{const v=versus(t.name,o=>!topHalf.has(o));return {team:t,score:v.games?v.points/v.games:0};}).sort((a,b)=>b.score-a.score);
+  const robin=playedTeams.map(t=>{const hi=versus(t.name,o=>topHalf.has(o)&&o!==t.name),lo=versus(t.name,o=>!topHalf.has(o));return {team:t,delta:(hi.games?hi.points/hi.games:0)-(lo.games?lo.points/lo.games:0)};}).sort((a,b)=>b.delta-a.delta)[0];
+  const comeback=playedTeams.map(t=>{const higher=new Set(playedTeams.filter(o=>o.fantasyAverage>t.fantasyAverage).map(o=>o.name));const v=versus(t.name,o=>higher.has(o));return {team:t,wins:v.wins};}).sort((a,b)=>b.wins-a.wins)[0];
+  const h2h=playedTeams.flatMap(t=>TEAM_NAMES.filter(o=>o!==t.name).map(o=>{const v=versus(t.name,x=>x===o);return {team:t,opponent:o,points:v.points,games:v.games,ppg:v.games?v.points/v.games:0};})).filter(x=>x.games).sort((a,b)=>b.ppg-a.ppg||b.points-a.points);
+  const favoriteVictim=h2h[0];const nemesis=[...h2h].sort((a,b)=>a.ppg-b.ppg||b.games-a.games)[0];
+  const theft=completed.map(m=>{const h=m.homeFantasy,a=m.awayFantasy;if(h==null||a==null)return null;const winner=m.homeGoals>m.awayGoals?m.home:m.awayGoals>m.homeGoals?m.away:null;if(!winner)return null;const wf=winner===m.home?h:a,lf=winner===m.home?a:h;return {m,winner,delta:lf-wf};}).filter((x):x is NonNullable<typeof x>=>Boolean(x)).sort((a,b)=>b.delta-a.delta)[0];
+  const heartbreak=completed.map(m=>{const h=m.homeFantasy,a=m.awayFantasy;if(h==null||a==null)return null;const loser=m.homeGoals<m.awayGoals?m.home:m.awayGoals<m.homeGoals?m.away:null;if(!loser)return null;return {m,loser,fantasy:loser===m.home?h:a};}).filter((x):x is NonNullable<typeof x>=>Boolean(x)).sort((a,b)=>b.fantasy-a.fantasy)[0];
+  const latest=useMemo(()=>archive?latestByRound(archive.snapshots):new Map<number,Snapshot>(),[archive]);const monitoredRounds=latest.size,totalReads=archive?.snapshots.length??0,finalMissingEvents=lineupStats.reduce((sum,s)=>sum+s.finalMissing,0);
+  const xValues=playedTeams.map(t=>t.fantasyAverage),yValues=playedTeams.map(t=>t.points/t.played);const minX=Math.min(...xValues,0),maxX=Math.max(...xValues,1),minY=Math.min(...yValues,0),maxY=Math.max(...yValues,1);const position=(v:number,min:number,max:number)=>max===min?50:8+84*(v-min)/(max-min);
 
-    return TEAM_NAMES.map(name=>{
-      let observedRounds=0,finalMissing=0,firstObservedPresent=0,missingNearDeadline=0,samplesNearDeadline=0;
-      const firstPresenceLead:number[]=[];
-      for(const [round,readings] of byRound){
-        if(!readings.length)continue;
-        observedRounds++;
-        const latest=readings[readings.length-1].teams.find(t=>t.name===name);
-        if(latest&&!latest.present)finalMissing++;
-        const firstPresent=readings.find(s=>s.teams.find(t=>t.name===name)?.present);
-        if(firstPresent){
-          firstObservedPresent++;
-          const start=starts.get(round);
-          if(start!=null)firstPresenceLead.push((start-Date.parse(firstPresent.observed_at))/60000);
-        }
-        const start=starts.get(round);
-        if(start!=null){
-          const target=start-15*60*1000;
-          const candidate=readings.reduce<Snapshot|null>((best,s)=>{
-            const delta=Math.abs(Date.parse(s.observed_at)-target);
-            if(delta>10*60*1000)return best;
-            return !best||delta<Math.abs(Date.parse(best.observed_at)-target)?s:best;
-          },null);
-          if(candidate){samplesNearDeadline++;if(!candidate.teams.find(t=>t.name===name)?.present)missingNearDeadline++;}
-        }
-      }
-      return {name,observedRounds,finalMissing,firstObservedPresent,missingNearDeadline,samplesNearDeadline,avgFirstPresenceMinutes:firstPresenceLead.length?firstPresenceLead.reduce((a,b)=>a+b,0)/firstPresenceLead.length:null};
-    });
-  },[archive,schedule]);
+  const records=[
+    ['Miglior attacco',bestAttack?.name,bestAttack?`${bestAttack.goalsFor} gol`:null],['Miglior difesa',bestDefense?.name,bestDefense?`${bestDefense.goalsAgainst} subiti`:null],['Miglior media fantapunti',bestFantasy?.name,bestFantasy?fmt(bestFantasy.fantasyAverage):null],['Più costante',consistent?.name,consistent?`σ ${fmt(consistent.fantasyStdDev)}`:null],['Più imprevedibile',volatile?.name,volatile?`σ ${fmt(volatile.fantasyStdDev)}`:null],['Pareggite',drawKing?.name,drawKing?`${Math.round(drawKing.drawRate*100)}% pareggi`:null],['All or nothing',allOrNothing?.name,allOrNothing?`${Math.round(allOrNothing.drawRate*100)}% pareggi`:null],['Ammazzagrandi',giantKillers[0]?.team.name,giantKillers[0]?`${fmt(giantKillers[0].score)} pt/gara vs top`:null],['Schiacciasassi',stompers[0]?.team.name,stompers[0]?`${fmt(stompers[0].score)} pt/gara vs bottom`:null],['Robin Hood',robin?.team.name,robin?`${robin.delta>=0?'+':''}${fmt(robin.delta)} pt/gara`:null],['Re delle rimonte',comeback?.team.name,comeback?`${comeback.wins} vittorie vs team più performanti`:null],['Clean sheet fantasy',[...playedTeams].sort((a,b)=>b.shutoutWins-a.shutoutWins)[0]?.name,[...playedTeams].sort((a,b)=>b.shutoutWins-a.shutoutWins)[0]?.shutoutWins?`${[...playedTeams].sort((a,b)=>b.shutoutWins-a.shutoutWins)[0].shutoutWins} vittorie con rivale <66`:null],['Bestia nera',nemesis?.opponent,nemesis?`${nemesis.team.name}: ${fmt(nemesis.ppg)} pt/gara contro`:null],['Vittima preferita',favoriteVictim?.opponent,favoriteVictim?`${favoriteVictim.team.name}: ${fmt(favoriteVictim.ppg)} pt/gara contro`:null],['Furto dell’anno',theft?.winner,theft?`vince con ${fmt(theft.delta)} FP in meno`:null],['Beffa dell’anno',heartbreak?.loser,heartbreak?`sconfitta con ${fmt(heartbreak.fantasy)} FP`:null],['Vittoria più larga',biggestWin?biggestWin.homeGoals>biggestWin.awayGoals?biggestWin.home:biggestWin.away:null,biggestWin?`${Math.abs(biggestWin.homeGoals-biggestWin.awayGoals)} gol di scarto`:null],
+  ];
 
-  const latest=useMemo(()=>archive?latestByRound(archive.snapshots):new Map<number,Snapshot>(),[archive]);
-  const monitoredRounds=latest.size;
-  const totalReads=archive?.snapshots.length??0;
-  const finalMissingEvents=stats.reduce((sum,s)=>sum+s.finalMissing,0);
-
-  return <div className="app-shell">
-    <header className="topbar"><a href="/" className="brand" aria-label="FANTAMONITOR home"><span className="brand-mark">FM</span>FANTAMONITOR</a><a href="/" className="btn"><ArrowLeft/>Dashboard</a></header>
-    <main style={{maxWidth:1180,margin:'0 auto',padding:'24px 16px 48px'}}>
-      <div className="page-heading"><div><div className="eyebrow">Stagione 2026 / 27</div><h1>Statistiche formazioni</h1><div className="sync-note"><BarChart3/>Metriche costruite sulle osservazioni archiviate da FANTAMONITOR</div></div></div>
-      {loading&&<section className="panel"><p>Caricamento statistiche…</p></section>}
-      {error&&<div role="alert" className="error-banner"><TriangleAlert size={20}/><span>{error}</span></div>}
-      {!loading&&!error&&archive&&<>
-        <section className="scoreboard" aria-label="Riepilogo statistico">
-          <div className="score-main"><div className="score-label"><span className="eyebrow">Copertura dati</span></div><div className="score-number"><strong>{monitoredRounds}</strong><span>/ 35</span></div><p className="score-caption">giornate con almeno una osservazione</p></div>
-          <div className="score-aside"><div className="aside-row"><BarChart3/><div><strong>{totalReads} letture archiviate</strong><p>Ogni lettura rappresenta uno stato osservato, non l’orario esatto di consegna.</p></div></div><div className="aside-row"><Clock3/><div><strong>{finalMissingEvents} assenze nell’ultima lettura</strong><p>Conteggio cumulativo squadra-giornata sull’ultima osservazione disponibile.</p></div></div></div>
-        </section>
-        <section className="panel" style={{marginTop:20,overflowX:'auto'}}>
-          <div className="panel-head"><div><h2>Andamento per squadra</h2><small>La “prima presenza” indica la prima lettura in cui la formazione risulta presente; non coincide necessariamente con l’invio reale.</small></div></div>
-          <table className="team-table" style={{width:'100%'}}>
-            <thead><tr><th>Squadra</th><th>Giornate osservate</th><th>Assente ultima lettura</th><th>Presente alla prima lettura</th><th>Assente ~T-15m</th><th>Prima presenza osservata media</th></tr></thead>
-            <tbody>{stats.map(s=><tr key={s.name}><td><strong>{s.name}</strong></td><td>{s.observedRounds}</td><td>{s.finalMissing}</td><td>{s.firstObservedPresent}/{s.observedRounds}</td><td>{s.samplesNearDeadline?`${s.missingNearDeadline}/${s.samplesNearDeadline}`:'—'}</td><td>{formatMinutes(s.avgFirstPresenceMinutes)}</td></tr>)}</tbody>
-          </table>
-        </section>
-        <section className="panel" style={{marginTop:20}}><h2>Interpretazione</h2><p>Le statistiche descrivono ciò che FANTAMONITOR ha osservato ai vari controlli. Quando una formazione compare per la prima volta tra due letture, il sistema può collocare solo l’intervallo in cui è diventata visibile, non il timestamp esatto dell’invio su Fantacalcio.</p></section>
-      </>}
-    </main>
-  </div>;
+  return <div className="app-shell"><header className="topbar"><a href="/" className="brand"><span className="brand-mark">FM</span>FANTAMONITOR</a><a href="/" className="btn"><ArrowLeft/>Dashboard</a></header><main style={{maxWidth:1180,margin:'0 auto',padding:'24px 16px 52px'}}>
+    <div className="page-heading"><div><div className="eyebrow">Stagione 2026 / 27</div><h1>Performance & risultati</h1><div className="sync-note"><ChartNoAxesCombined/>Classifica, forma e qualità delle prestazioni lette insieme</div></div></div>
+    {loading&&<section className="panel"><p>Caricamento statistiche…</p></section>}{error&&<div role="alert" className="error-banner"><TriangleAlert size={20}/><span>{error}</span></div>}
+    {!loading&&!error&&<>
+      {performanceError&&<div className={styles.warning}><strong>Dati competitivi temporaneamente non disponibili.</strong> {performanceError}</div>}
+      {performance?.warnings.map((w,i)=><div className={styles.warning} key={i}>{w}</div>)}
+      {playedTeams.length?<>
+        <section className={styles.hero}><div className={styles.heroCard}><span className={styles.pill}>Power Ranking · aggiornamento live dalla lega</span><h2>{teams[0]?.name}</h2><p>Il Power Ranking non replica la classifica: combina forma recente, produzione di fantapunti, risultati e costanza.</p>{teams[0]&&<div className={styles.leader}><Crest name={teams[0].name}/><div><strong>{fmt(teams[0].powerScore)} / 100</strong><span>{classifyTeam(teams[0],playedTeams)} · {fmt(teams[0].fantasyAverage)} FP medi · {teams[0].points} punti</span></div></div>}</div><div className={styles.heroSide}><div className={styles.mini}><span className={styles.miniLabel}>Partite lette</span><strong>{completed.length}</strong><small>{Math.max(...playedTeams.map(t=>t.played))} giornate calcolate</small></div><div className={styles.mini}><span className={styles.miniLabel}>Leader classifica</span><strong>{[...playedTeams].sort((a,b)=>b.points-a.points)[0]?.name}</strong><small>{[...playedTeams].sort((a,b)=>b.points-a.points)[0]?.points} punti</small></div><div className={styles.mini}><span className={styles.miniLabel}>Top performance</span><strong>{bestFantasy?.name}</strong><small>{bestFantasy?fmt(bestFantasy.fantasyAverage):'—'} FP medi</small></div></div></section>
+        <section className={styles.section}><div className={styles.sectionHead}><div><h2>Stato della lega</h2><p>Chi corre, chi rallenta e chi raccoglie più o meno di quanto produce.</p></div></div><div className={styles.cardGrid}><PerfCard label="Più in forma" team={bestForm} value={bestForm?fmt(bestForm.formScore,0):'—'} detail={bestForm?`${bestForm.recentPoints} punti nelle ultime ${bestForm.recentForm.length}`:'Dati insufficienti'} icon={<Flame size={19}/>}/><PerfCard label="In crisi" team={crisis} value={crisis?fmt(crisis.formScore,0):'—'} detail={crisis?`${crisis.winlessStreak} gare senza vittorie`:'Dati insufficienti'} icon={<TrendingDown size={19}/>}/><PerfCard label="Corto muso" team={corto} value={corto?`${Math.round(corto.closeWinRate*100)}%`:'—'} detail={corto?`${corto.narrowWins}/${corto.wins} vittorie con un gol di scarto`:'Nessuna vittoria'} icon={<Target size={19}/>}/><PerfCard label="Overperformer" team={lucky} value={lucky?`${lucky.luckDelta>=0?'+':''}${fmt(lucky.luckDelta,0)}`:'—'} detail="Punti reali rispetto ai punti attesi" icon={<Scale size={19}/>}/></div></section>
+        <section className={styles.section}><div className={styles.twoCol}><div className={styles.plot}><div className={styles.sectionHead}><div><h2>Performance vs risultati</h2><p>X = fantapunti medi · Y = punti per partita.</p></div></div><div className={styles.quadrant}><span className={`${styles.quadLabel} ${styles.q1}`}>Dominanti</span><span className={`${styles.quadLabel} ${styles.q2}`}>Ciniche</span><span className={`${styles.quadLabel} ${styles.q3}`}>In difficoltà</span><span className={`${styles.quadLabel} ${styles.q4}`}>Sfortunate</span>{playedTeams.map(t=><span key={t.name} title={`${t.name} · ${classifyTeam(t,playedTeams)} · ${fmt(t.fantasyAverage)} FP · ${fmt(t.points/t.played)} pt/g`} className={styles.dot} style={{left:`${position(t.fantasyAverage,minX,maxX)}%`,bottom:`${position(t.points/t.played,minY,maxY)}%`,backgroundColor:TEAM_COLORS[TEAM_NAMES.indexOf(t.name)]}}>{initials(t.name)}</span>)}<span className={styles.axisY}>Risultati</span></div><div className={styles.axisX}>Performance →</div></div><div className={styles.ranking}><div className={styles.sectionHead}><div><h2>Power Ranking</h2><p>35% forma · 30% FP · 20% risultati · 15% consistenza.</p></div></div>{teams.filter(t=>t.played).map((t,i)=><div className={styles.powerRow} key={t.name}><span className={styles.rank}>{i+1}</span><div><div className={styles.rankName}><strong>{t.name}</strong><span className={styles.pill}>{classifyTeam(t,playedTeams)}</span></div><div className={styles.bar}><i style={{width:`${t.powerScore}%`}}/></div></div><span className={styles.score}>{fmt(t.powerScore,0)}</span></div>)}</div></div></section>
+        <section className={styles.section}><div className={styles.ranking}><div className={styles.sectionHead}><div><h2>Trend ultime giornate</h2><p>Risultati e produzione recente per tutte le squadre.</p></div></div><div style={{overflowX:'auto'}}><table className={styles.trendTable}><thead><tr><th>Squadra</th><th>Forma</th><th>FP medi</th><th>Striscia</th><th>Trend FP</th></tr></thead><tbody>{playedTeams.sort((a,b)=>b.formScore-a.formScore).map(t=>{const vals=completed.filter(m=>m.home===t.name||m.away===t.name).slice(-5).map(m=>teamMatchView(m,t.name).fantasy??0);const max=Math.max(...vals,1);return <tr key={t.name}><td><strong>{t.name}</strong></td><td><Form values={t.recentForm}/></td><td>{fmt(t.recentFantasyAverage)}</td><td>{t.winStreak?`${t.winStreak} V consecutive`:t.unbeatenStreak?`${t.unbeatenStreak} senza sconfitte`:t.losingStreak?`${t.losingStreak} sconfitte`:t.winlessStreak?`${t.winlessStreak} senza vittorie`:'—'}</td><td><div className={styles.spark}>{vals.map((v,i)=><i key={i} style={{height:`${Math.max(4,(v/max)*28)}px`}}/>)}</div></td></tr>})}</tbody></table></div></div></section>
+        <section className={styles.section}><div className={styles.sectionHead}><div><h2>Record & identità</h2><p>Statistiche descrittive, scontri diretti e anomalie di risultato.</p></div></div><div className={styles.records}><div className={styles.recordGrid}>{records.filter(r=>r[1]).map(([label,name,value])=><div className={styles.record} key={String(label)}><small>{label}</small><strong>{name}</strong><span>{value}</span></div>)}</div></div></section>
+        <section className={styles.section}><div className={styles.cardGrid}><PerfCard label="Underperformer" team={unlucky} value={unlucky?fmt(unlucky.luckDelta,0):'—'} detail="Risultati peggiori della produzione attesa" icon={<TrendingDown size={19}/>}/><PerfCard label="Dominatore" team={[...playedTeams].sort((a,b)=>b.bigWins-a.bigWins)[0]} value={String([...playedTeams].sort((a,b)=>b.bigWins-a.bigWins)[0]?.bigWins??0)} detail="Vittorie con almeno 2 gol di scarto" icon={<Crown size={19}/>}/><PerfCard label="Striscia positiva" team={[...playedTeams].sort((a,b)=>b.unbeatenStreak-a.unbeatenStreak)[0]} value={String([...playedTeams].sort((a,b)=>b.unbeatenStreak-a.unbeatenStreak)[0]?.unbeatenStreak??0)} detail="Partite consecutive senza sconfitte" icon={<Shield size={19}/>}/><PerfCard label="Striscia negativa" team={[...playedTeams].sort((a,b)=>b.losingStreak-a.losingStreak)[0]} value={String([...playedTeams].sort((a,b)=>b.losingStreak-a.losingStreak)[0]?.losingStreak??0)} detail="Sconfitte consecutive" icon={<Swords size={19}/>}/></div></section>
+      </>:<section className={`${styles.records} ${styles.empty}`}><Gauge size={28}/><strong>La stagione competitiva non ha ancora dati leggibili</strong><p>Le statistiche di performance compariranno automaticamente quando Fantacalcio renderà disponibili risultati calcolati e fantapunti della lega. FANTAMONITOR non genera valori sostitutivi.</p></section>}
+      {archive&&<details className={styles.legacy}><summary>Statistiche inserimento formazioni</summary><section className="scoreboard" aria-label="Riepilogo statistico"><div className="score-main"><div className="score-label"><span className="eyebrow">Copertura dati</span></div><div className="score-number"><strong>{monitoredRounds}</strong><span>/ 35</span></div><p className="score-caption">giornate con almeno una osservazione</p></div><div className="score-aside"><div className="aside-row"><BarChart3/><div><strong>{totalReads} letture archiviate</strong><p>Ogni lettura rappresenta uno stato osservato.</p></div></div><div className="aside-row"><Clock3/><div><strong>{finalMissingEvents} assenze nell’ultima lettura</strong><p>Conteggio cumulativo squadra-giornata.</p></div></div></div></section><section className="panel" style={{marginTop:16,overflowX:'auto'}}><div className="panel-head"><div><h2>Andamento per squadra</h2><small>La prima presenza è la prima osservazione in cui la formazione risulta presente.</small></div></div><table className="team-table" style={{width:'100%'}}><thead><tr><th>Squadra</th><th>Giornate osservate</th><th>Assente ultima lettura</th><th>Presente alla prima lettura</th><th>Assente ~T-15m</th><th>Prima presenza media</th></tr></thead><tbody>{lineupStats.map(s=><tr key={s.name}><td><strong>{s.name}</strong></td><td>{s.observedRounds}</td><td>{s.finalMissing}</td><td>{s.firstObservedPresent}/{s.observedRounds}</td><td>{s.samplesNearDeadline?`${s.missingNearDeadline}/${s.samplesNearDeadline}`:'—'}</td><td>{formatMinutes(s.avgFirstPresenceMinutes)}</td></tr>)}</tbody></table></section></details>}
+    </>}
+  </main></div>;
 }
