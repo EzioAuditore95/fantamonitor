@@ -21,3 +21,16 @@ async function competitionCached(){if(lastCompetition&&Date.now()-lastCompetitio
 globalThis.fetch=async function(input,init){const url=typeof input==='string'?input:input instanceof URL?input.href:input?.url||'';if(/\/rest\/v1\/rpc\/(fm_complete_auto_sync|fm_bot_import_snapshot)$/.test(url)&&typeof init?.body==='string'){try{const body=JSON.parse(init.body);if(body?.sample&&!body.sample.competition){body.sample.competition=await competitionCached();init={...init,body:JSON.stringify(body)};console.info('competition_snapshot_attached',{rpc:url.split('/').at(-1)});}}catch(error){console.error('competition_snapshot_attach_failed',error instanceof Error?error.message:error);}}return originalFetch(input,init);};
 
 http.createServer=function(listener,...args){return originalCreateServer(async(req,res)=>{const path=new URL(req.url||'/',`http://${req.headers.host||'localhost'}`).pathname;if(path!=='/competition'||req.method!=='POST')return listener(req,res);let raw='';for await(const chunk of req)raw+=chunk;if(raw.length>4096){res.writeHead(413);return res.end();}const ts=String(req.headers['x-fm-timestamp']||'');if(!auth(req,raw)){res.writeHead(401,{'content-type':'application/json'});return res.end(JSON.stringify({error:'connector_signature_invalid'}));}try{const data=await competitionCached();signedJson(res,200,{competition:data},ts);}catch(error){console.error('competition_capture_failed',error instanceof Error?error.message:error);signedJson(res,502,{error:'competition_capture_failed'},ts);}},...args);};
+
+const oneShotRound=Number(process.env.FM_ONE_SHOT_SYNC_ROUND||0);
+if(Number.isInteger(oneShotRound)&&oneShotRound>=1&&oneShotRound<=35&&secret){
+  setTimeout(async()=>{
+    const body=JSON.stringify({round:oneShotRound});
+    const ts=String(Date.now());
+    try{
+      const response=await originalFetch(`http://127.0.0.1:${Number(process.env.PORT||8080)}/sync`,{method:'POST',headers:{'content-type':'application/json','x-fm-timestamp':ts,'x-fm-signature':sign(ts,body)},body,signal:AbortSignal.timeout(90000)});
+      const text=await response.text();
+      console.info('one_shot_result_sync_complete',{round:oneShotRound,status:response.status,body:text.slice(0,500)});
+    }catch(error){console.error('one_shot_result_sync_failed',{round:oneShotRound,error:error instanceof Error?error.message:String(error)});}
+  },5000);
+}
