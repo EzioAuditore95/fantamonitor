@@ -31,6 +31,11 @@ if(Number.isInteger(oneShotRound)&&oneShotRound>=1&&oneShotRound<=35&&secret){
       const response=await originalFetch(`http://127.0.0.1:${Number(process.env.PORT||8080)}/sync`,{method:'POST',headers:{'content-type':'application/json','x-fm-timestamp':ts,'x-fm-signature':sign(ts,body)},body,signal:AbortSignal.timeout(90000)});
       const text=await response.text();
       console.info('one_shot_result_sync_complete',{round:oneShotRound,status:response.status,body:text.slice(0,500)});
+      if(!response.ok){
+        const competitionData=await captureCompetition();
+        const r=competitionData.calendar.find(x=>x.round===oneShotRound);
+        console.info('one_shot_competition_capture',{round:oneShotRound,calculated:Boolean(r?.calculated),matches:r?.matches??[],standings:competitionData.standings});
+      }
     }catch(error){console.error('one_shot_result_sync_failed',{round:oneShotRound,error:error instanceof Error?error.message:String(error)});}
   },5000);
 }
