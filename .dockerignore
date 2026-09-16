@@ -6,5 +6,3 @@ node_modules
 prototype/data
 lib/data
 *.sqlite*
-.wrangler
-.sites-runtime
