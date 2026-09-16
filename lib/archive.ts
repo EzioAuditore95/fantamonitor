@@ -1,6 +1,5 @@
 import { createClient } from './supabase/server';
 import {snapshotSchema,normalize,canonical,type Snapshot} from './model';
-export function initialArchive(){return {events:[]};}
 export async function listSnapshots():Promise<Snapshot[]>{
  const client=await createClient();const rows:Snapshot[]=[];
  for(let offset=0;;offset+=500){const {data,error}=await client.from('fm_observations').select('body').order('observed_at').order('id').range(offset,offset+499);if(error)throw new Error('Archive unavailable');

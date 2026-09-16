@@ -2,6 +2,8 @@ import {test,after} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {PGlite} from '@electric-sql/pglite';
+import {TEAM_NAMES,snapshotSchema} from '../lib/model.ts';
+import {reviewInputSchema,halfForRound} from '../lib/penalties.ts';
 const db=new PGlite();
 await db.exec(`create role anon; create role authenticated; create role service_role bypassrls;
 create schema auth;create table auth.users(id uuid primary key);
@@ -46,5 +48,40 @@ test('direct RPC cannot bypass source, team or past-deadline validation',async()
  await assert.rejects(asUser(admin,sql,[JSON.stringify({...review,team:'Other'})]),/invalid_review_scope/);
  await assert.rejects(asUser(admin,sql,[JSON.stringify({...review,source_url:'https://example.com'})]),/invalid_source/);
  await assert.rejects(asUser(admin,'select fm_import_observations($1::jsonb)',[JSON.stringify([{...observation,body:{...observation.body,inserted:99}}])]),/invalid_count/);
+});
+// The league contract is written twice, in Zod and in SQL, because the runtimes differ.
+// These assertions are what makes a drift between the two copies fail loudly.
+test('TypeScript and SQL agree on the league contract',async()=>{
+ const definition=(await db.query("select pg_get_functiondef(p.oid) as src from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='fm_valid_team'")).rows[0].src;
+ const sqlTeams=definition.match(/array\[(.*?)\]/s)[1].split(',').map(x=>x.trim().slice(1,-1));
+ assert.equal(TEAM_NAMES.length,10);
+ assert.deepEqual([...sqlTeams].sort(),[...TEAM_NAMES].sort());
+ for(const name of TEAM_NAMES)assert.equal((await db.query('select public.fm_valid_team($1) as ok',[name])).rows[0].ok,true,name);
+ for(const name of ['Other','AC idovalproico',''])assert.equal((await db.query('select public.fm_valid_team($1) as ok',[name])).rows[0].ok,false,name);
+
+ const importSql='select fm_import_observations($1::jsonb)';
+ for(const round of [0,36]){
+  assert.throws(()=>halfForRound(round));
+  assert.equal(snapshotSchema.safeParse({...observation.body,round}).success,false);
+  await assert.rejects(asUser(admin,importSql,[JSON.stringify([{...observation,body:{...observation.body,round}}])]),/invalid_round_time/);
+  await assert.rejects(asUser(admin,'select fm_save_review($1::jsonb,0)',[JSON.stringify({...review,round})]),/invalid_review_scope/);
+ }
+ for(const round of [1,35])assert.doesNotThrow(()=>halfForRound(round));
+
+ // An accepted source reaches the revision check; a rejected one never gets that far.
+ const prefix='https://leghe.fantacalcio.it/chefantavitae10/view/competition/337500';
+ for(const [source_url,accepted] of [
+  [`${prefix}/round/1`,true],[`${prefix}/manage-lineups/1`,true],[`${prefix}/manage-lineups/1?team=12420064`,true],
+  [`${prefix}/manage-lineups/2`,false],[`${prefix.replace('337500','999999')}/manage-lineups/1`,false],
+  [`${prefix.replace('https://','http://')}/manage-lineups/1`,false],['https://example.com/manage-lineups/1',false],
+ ]){
+  assert.equal(reviewInputSchema.safeParse({...review,source_url,expected_revision:0}).success,accepted,source_url);
+  await assert.rejects(asUser(admin,'select fm_save_review($1::jsonb,999)',[JSON.stringify({...review,source_url})]),accepted?/review_conflict/:/invalid_source/,source_url);
+ }
+
+ for(const [field,value] of [['league','altra-lega'],['season','2025-2026'],['competition_id','999999']]){
+  assert.equal(snapshotSchema.safeParse({...observation.body,[field]:value}).success,false,field);
+  await assert.rejects(asUser(admin,importSql,[JSON.stringify([{...observation,body:{...observation.body,[field]:value}}])]),/invalid_scope/,field);
+ }
 });
 after(async()=>{await db.close();});
