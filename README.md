@@ -4,8 +4,15 @@ Dashboard della lega con gettoni, penalità e layout mobile.
 
 Istruzioni operative: [deploy/README.md](deploy/README.md).
 
-Questo branch è la migrazione dal runtime Sites a Vercel e Supabase.
-La sincronizzazione automatica Fantacalcio su Railway non è ancora implementata.
+La migrazione dal runtime Sites a Vercel e Supabase è completata: la persistenza è
+Supabase e la build è quella di Next.
+
+La sincronizzazione automatica è attiva. Un connettore su Railway accede a Fantacalcio
+con una sessione autenticata e acquisisce la giornata ai checkpoint `T-24h`, `T-12h`,
+`T-1h`, `T-15m` e `T+5m` rispetto al calcio d'inizio, letto dal calendario in
+`fm_round_schedule`. Ogni esecuzione è registrata in `fm_auto_sync_runs`, che impedisce
+esecuzioni doppie sullo stesso checkpoint, e pubblica lo stato delle formazioni su
+Telegram. La lettura manuale dalla dashboard resta disponibile all'amministratore.
 
 ## Gettoni e penalità
 
