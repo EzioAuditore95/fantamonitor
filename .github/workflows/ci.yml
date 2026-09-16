@@ -19,6 +19,7 @@ jobs:
           python-version: '3.12'
       - run: npm ci
       - run: npx tsc --noEmit
+      - run: npm run lint
       - run: node --test prototype/tests/collector.test.mjs
       - run: npm test
       - run: python -m unittest discover -s tests -v

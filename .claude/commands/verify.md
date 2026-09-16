@@ -8,11 +8,12 @@ a cascata.
 
 1. `npm ci` (solo se `node_modules/` è assente o `package-lock.json` è cambiato)
 2. `npx tsc --noEmit`
-3. `node --test prototype/tests/collector.test.mjs`
-4. `npm test` — include `tests/penalties.test.mjs` (regole di dominio) e
+3. `npm run lint`
+4. `node --test prototype/tests/collector.test.mjs`
+5. `npm test` — include `tests/penalties.test.mjs` (regole di dominio) e
    `tests/postgres.test.mjs` (migrazioni + RLS in PGlite)
-5. `cd prototype && python -m unittest discover -s tests -v`
-6. `npm run build`
+6. `cd prototype && python -m unittest discover -s tests -v`
+7. `npm run build`
 
 Poi riferisci in modo sintetico:
 

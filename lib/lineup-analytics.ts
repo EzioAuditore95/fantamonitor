@@ -55,8 +55,8 @@ export function computeLineupAnalytics(archive:Archive,performance?:PerformanceP
       if(starters.length===11)completeLineups++;
       const keys=new Set(starters.map(playerKey));
       for(const p of starters){const key=playerKey(p);const current=playerCounts.get(key);if(current)current.starts++;else playerCounts.set(key,{player:p,starts:1});}
-      const module=normalizeModule(formation.module);
-      if(module){const current=moduleCounts.get(module)??{uses:0,fantasy:[]};current.uses++;const match=matches.find(m=>m.round===round&&(m.home===name||m.away===name));const fp=match?fantasyFor(match,name):null;if(fp!=null)current.fantasy.push(fp);moduleCounts.set(module,current);}
+      const formationModule=normalizeModule(formation.module);
+      if(formationModule){const current=moduleCounts.get(formationModule)??{uses:0,fantasy:[]};current.uses++;const match=matches.find(m=>m.round===round&&(m.home===name||m.away===name));const fp=match?fantasyFor(match,name):null;if(fp!=null)current.fantasy.push(fp);moduleCounts.set(formationModule,current);}
       if(prev){let overlap=0;for(const key of keys)if(prev.has(key))overlap++;overlapSum+=overlap/Math.max(1,Math.min(11,prev.size,keys.size));changesSum+=Math.max(0,keys.size-overlap);transitions++;}
       prev=keys;
     }

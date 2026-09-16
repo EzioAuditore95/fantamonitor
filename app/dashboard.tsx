@@ -25,6 +25,9 @@ export default function Dashboard(){
   const [importOpen,setImportOpen]=useState(false),[file,setFile]=useState<File|null>(null),[importing,setImporting]=useState(false),[syncing,setSyncing]=useState(false),[importError,setImportError]=useState(''),[message,setMessage]=useState('');
   const [now,setNow]=useState(0);const mounted=useRef(true);const requestId=useRef(0);
   const refresh=useCallback(async()=>{const request=++requestId.current;setLoading(true);setError('');try{const res=await fetch('/api/archive',{cache:'no-store'});const result=await res.json() as Archive & {error?:string};if(!res.ok)throw new Error(result.error);if(mounted.current&&request===requestId.current)setData(result);}catch(e){if(mounted.current&&request===requestId.current)setError(e instanceof Error?e.message:'Lettura non riuscita.');}finally{if(mounted.current&&request===requestId.current)setLoading(false);}},[]);
+  // `now` starts at 0 so the server and client agree on the first paint; the real
+  // clock can only be read after hydration.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(()=>{mounted.current=true;refresh();setNow(Date.now());const tick=setInterval(()=>{setNow(Date.now());if(document.visibilityState==='visible')refresh();},60000);const onVisible=()=>{if(document.visibilityState==='visible')refresh();};document.addEventListener('visibilitychange',onVisible);return()=>{mounted.current=false;clearInterval(tick);document.removeEventListener('visibilitychange',onVisible)}},[refresh]);
   const byRound=latestByRound(data?.snapshots??[]),current=byRound.get(Number(round));
   const rows=current?.teams??[],missing=rows.filter(t=>!t.present);

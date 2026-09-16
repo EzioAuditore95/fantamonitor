@@ -25,6 +25,9 @@ export default function RoundCountdown(){
   const [now,setNow]=useState(()=>Date.now());
   const [target,setTarget]=useState<Element|null>(null);
   useEffect(()=>{
+    // The portal host only exists after hydration: reading it during render would
+    // make the server and client markup disagree.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTarget(document.querySelector('.league-banner'));
     let active=true;
     fetch('/api/schedule',{cache:'no-store'}).then(async r=>{const body=await r.json() as ScheduleResponse;if(active&&r.ok)setRows(body.schedule??[]);}).catch(()=>{});

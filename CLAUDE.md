@@ -22,7 +22,7 @@ npm test             # node --experimental-strip-types --test tests/*.test.mjs
 Pipeline di validazione completa (identica a `.github/workflows/ci.yml`):
 
 ```bash
-npm ci && npx tsc --noEmit && node --test prototype/tests/collector.test.mjs && npm test && (cd prototype && python -m unittest discover -s tests -v) && npm run build
+npm ci && npx tsc --noEmit && npm run lint && node --test prototype/tests/collector.test.mjs && npm test && (cd prototype && python -m unittest discover -s tests -v) && npm run build
 ```
 
 - Next.js 16.2.6 (App Router) · React 19.2 · TypeScript strict · Tailwind 4 ·
