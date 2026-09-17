@@ -8,46 +8,50 @@ import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from 
 import { Sheet,SheetContent,SheetDescription,SheetHeader,SheetTitle } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { TEAM_NAMES,displayDate,type Archive } from '@/lib/model';
+import { displayDate,type Archive } from '@/lib/model';
 import { balances,latestReviews,reviewKey,serieARound,euro,type Period,type ReviewInput } from '@/lib/penalties';
-import { AGGREGATE_PERIOD,CHEFANTAVITAE10,findPeriod,leaguePath,periodForRound } from '@/lib/league';
-const cfg=CHEFANTAVITAE10;
+import { AGGREGATE_PERIOD,findPeriod,leaguePath,periodForRound,teamNames,type LeagueConfig } from '@/lib/league';
 
 const statusLabel={delivered:'Consegnata entro il termine',missed:'Non consegnata entro il termine',unverified:'Da verificare'};
-const sourceFor=(round:number)=>`https://leghe.fantacalcio.it${leaguePath(cfg)}manage-lineups/${round}`;
+const sourceFor=(cfg:LeagueConfig,round:number)=>`https://leghe.fantacalcio.it${leaguePath(cfg)}manage-lineups/${round}`;
 function localDate(value:string|null){if(!value)return '';const d=new Date(value);return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);}
-export function PenaltySummary({data,round,onOpen}:{data:Archive|null;round:number;onOpen:()=>void}){
-  const period=periodForRound(cfg,round),rows=balances(cfg,TEAM_NAMES,period.key,data?.reviews??[]);
+export function PenaltySummary({config,data,round,onOpen}:{config:LeagueConfig;data:Archive|null;round:number;onOpen:()=>void}){
+  const cfg=config;
+  const period=periodForRound(cfg,round),rows=balances(cfg,teamNames(cfg),period.key,data?.reviews??[]);
   return <button className="penalty-summary" onClick={onOpen}><Coins size={22}/><span><strong>Gettoni e penalità · {period.label}</strong><span>{data?`${rows.reduce((n,r)=>n+r.used,0)} gettoni utilizzati · ${euro(rows.reduce((n,r)=>n+r.penalty,0))} di penalità registrate`:'Caricamento registro…'}</span></span><ChevronRight size={20}/></button>;
 }
-export default function PenaltiesPanel({data,round,onSaved}:{data:Archive|null;round:number;onSaved:()=>Promise<void>}){
+export default function PenaltiesPanel({config,data,round,onSaved}:{config:LeagueConfig;data:Archive|null;round:number;onSaved:()=>Promise<void>}){
+  const cfg=config,TEAM_NAMES=teamNames(cfg);
   const [period,setPeriod]=useState<Period>(periodForRound(cfg,round).key),[detail,setDetail]=useState<string|null>(null);
   const [open,setOpen]=useState(false),[saving,setSaving]=useState(false),[error,setError]=useState('');
   const [team,setTeam]=useState(TEAM_NAMES[0]),[selectedRound,setSelectedRound]=useState(round);
-  const [status,setStatus]=useState<ReviewInput['status']>('unverified'),[deadline,setDeadline]=useState(''),[note,setNote]=useState(''),[source,setSource]=useState(sourceFor(round)),[revision,setRevision]=useState(0);
+  const [status,setStatus]=useState<ReviewInput['status']>('unverified'),[deadline,setDeadline]=useState(''),[note,setNote]=useState(''),[source,setSource]=useState(sourceFor(cfg,round)),[revision,setRevision]=useState(0);
   const reviews=data?.reviews??[],latest=latestReviews(reviews),rows=balances(cfg,TEAM_NAMES,period,reviews);
   const sum=(key:'penalty'|'missed'|'used'|'verified'|'total')=>rows.reduce((n,r)=>n+r[key],0);
   const teamRow=rows.find(r=>r.team===detail);
   const selectedPeriods=period===AGGREGATE_PERIOD?cfg.periods:[findPeriod(cfg,period)];
   function fill(name:string,day:number){
     const r=latest.get(reviewKey(name,day));setTeam(name);setSelectedRound(day);setStatus(r?.status??'unverified');
-    setDeadline(localDate(r?.deadline??null));setNote(r?.note??'');setSource(r?.source_url??sourceFor(day));setRevision(r?.revision??0);setError('');
+    setDeadline(localDate(r?.deadline??null));setNote(r?.note??'');setSource(r?.source_url??sourceFor(cfg,day));setRevision(r?.revision??0);setError('');
   }
   function edit(name:string,day:number){if(!data?.canManage)return;fill(name,day);setDetail(null);setOpen(true);}
   async function save(){
     setSaving(true);setError('');
     try{
-      const response=await fetch('/api/reviews',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({team,round:selectedRound,status,deadline:deadline?new Date(deadline).toISOString():null,note,source_url:source,expected_revision:revision})});
+      const response=await fetch(`/api/reviews?league=${encodeURIComponent(cfg.slug)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({team,round:selectedRound,status,deadline:deadline?new Date(deadline).toISOString():null,note,source_url:source,expected_revision:revision})});
       const result=await response.json() as {error?:string};if(!response.ok)throw new Error(result.error??'Salvataggio non riuscito.');
       await onSaved();setOpen(false);
     }catch(e){setError(e instanceof Error?e.message:'Salvataggio non riuscito.');}finally{setSaving(false);}
   }
   return <>
-    <div className="page-heading"><div><div className="eyebrow">Regolamento della lega</div><h1>Gettoni e penalità</h1><p className="sync-note">Prima assenza gratuita per girone. Dalla seconda: 5 € per ogni mancata consegna.</p></div><button className="btn primary" disabled={!data?.canManage} onClick={()=>edit(TEAM_NAMES[0],round)}><FileCheck2/>Verifica una giornata</button></div>
+    <div className="page-heading"><div><div className="eyebrow">Regolamento della lega</div><h1>Gettoni e penalità</h1><p className="sync-note">{cfg.freeTokens===1?'Prima assenza gratuita':`Prime ${cfg.freeTokens} assenze gratuite`} per periodo. Poi {euro(cfg.penaltyAmount)} per ogni mancata consegna.</p></div><button className="btn primary" disabled={!data?.canManage} onClick={()=>edit(TEAM_NAMES[0],round)}><FileCheck2/>Verifica una giornata</button></div>
     <Tabs value={period} onValueChange={v=>setPeriod(v as Period)}><TabsList className="period-tabs" aria-label="Girone del riepilogo">{cfg.periods.map(p=><TabsTrigger key={p.key} value={p.key}>{p.label}</TabsTrigger>)}<TabsTrigger value={AGGREGATE_PERIOD}>Complessivo</TabsTrigger></TabsList></Tabs>
-    <p className="period-description">{period==='andata'?'Serie A 1–19 · La lega parte dalla 4ª: giornate di lega 1–16.':period==='ritorno'?'Serie A 20–38 · Giornate di lega 17–35.':'Intera stagione · Un gettone per girone, senza trasferimento tra andata e ritorno.'}</p>
+    <p className="period-description">{period===AGGREGATE_PERIOD
+      ?`Intera stagione · ${cfg.freeTokens===1?'un gettone':`${cfg.freeTokens} gettoni`} per periodo, senza trasferimento tra periodi.`
+      :(()=>{const p=findPeriod(cfg,period),first=p.rounds[0],last=p.rounds[p.rounds.length-1];
+        return `Serie A ${serieARound(cfg,first)}–${serieARound(cfg,last)} · Giornate di lega ${first}–${last}.`;})()}</p>
     {!data?<section className="panel blank-panel">Registro non ancora disponibile.</section>:<>
-      <div className="penalty-metrics"><div className="panel number-card"><strong>{sum('used')}</strong><span>Gettoni utilizzati / {period==='complessivo'?20:10}</span></div><div className="panel number-card"><strong>{sum('missed')}</strong><span>Mancate consegne verificate</span></div><div className="panel number-card"><strong>{euro(sum('penalty'))}</strong><span>Penalità maturate</span></div></div>
+      <div className="penalty-metrics"><div className="panel number-card"><strong>{sum('used')}</strong><span>Gettoni utilizzati / {cfg.freeTokens*cfg.teamCount*(period===AGGREGATE_PERIOD?cfg.periods.length:1)}</span></div><div className="panel number-card"><strong>{sum('missed')}</strong><span>Mancate consegne verificate</span></div><div className="panel number-card"><strong>{euro(sum('penalty'))}</strong><span>Penalità maturate</span></div></div>
       <div className="coverage-note"><Info size={18}/><p><strong>{sum('verified')} esiti verificati su {sum('total')} squadra-giornate del periodo.</strong> I totali si basano sul registro verificato; le giornate senza esito, incluse quelle future, non consumano gettoni. La sincronizzazione automatica non è attiva.</p></div>
       <section className="panel"><div className="panel-head"><h2>Situazione per squadra</h2><small>Gettoni residui sul registro</small></div><Table className="penalty-table"><TableHeader><TableRow><TableHead>Squadra</TableHead>{selectedPeriods.map(p=><TableHead key={p.key}>Gettone {p.label.toLowerCase()}</TableHead>)}<TableHead>Assenze</TableHead><TableHead>Penalità</TableHead><TableHead>Esiti verificati</TableHead><TableHead><span className="sr-only">Dettagli</span></TableHead></TableRow></TableHeader><TableBody>{rows.map(r=><TableRow key={r.team}><TableCell className="penalty-team"><button onClick={()=>setDetail(r.team)}>{r.team}</button></TableCell>{selectedPeriods.map(p=><TableCell data-label={`Gettone ${p.label.toLowerCase()}`} key={p.key}><span className={'badge '+(r.periods[p.key].remaining?'present':'unknown')}>{r.periods[p.key].remaining?'1 residuo':'Utilizzato'}</span></TableCell>)}<TableCell data-label="Assenze">{r.missed}</TableCell><TableCell data-label="Penalità"><strong className={r.penalty?'amount-due':''}>{euro(r.penalty)}</strong></TableCell><TableCell data-label="Esiti verificati">{r.verified} / {r.total}</TableCell><TableCell className="penalty-action"><button className="detail-button" onClick={()=>setDetail(r.team)} aria-label={`Dettaglio gettoni e penalità ${r.team}`}>Dettaglio<ChevronRight size={16}/></button></TableCell></TableRow>)}</TableBody></Table></section>
       <p className="footnote">Il primo gettone copre l’assenza cronologicamente più antica del girone. Una correzione aggiorna automaticamente tutti gli importi. Le penalità indicate non rappresentano pagamenti effettuati.</p>

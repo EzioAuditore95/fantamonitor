@@ -1,5 +1,6 @@
 import { createHash,createHmac,timingSafeEqual } from 'node:crypto';
-import { snapshotSchema,competitionSchema,normalize,type Competition } from './model';
+import { snapshotSchemaFor,makeCompetitionSchema,normalize,type Competition } from './model';
+import type { LeagueConfig } from './league.ts';
 import { importSnapshots } from './archive';
 
 const MAX_RESPONSE=524_288;
@@ -16,14 +17,15 @@ async function connectorRequest(path:string,input:unknown,timeout:number){
   const returned=response.headers.get('x-fm-signature')??'',expected=signature(timestamp,text);if(!returned||returned.length!==expected.length||!timingSafeEqual(Buffer.from(returned),Buffer.from(expected)))throw new Error('Firma del connettore non valida.');
   return JSON.parse(text) as Record<string,unknown>;
 }
-async function competitionFromConnector():Promise<Competition|null>{try{const payload=await connectorRequest('/competition',{},35_000);return competitionSchema.parse(payload.competition);}catch(error){console.error('competition_snapshot_failed',error instanceof Error?error.message:error);return null;}}
+async function competitionFromConnector(cfg:LeagueConfig):Promise<Competition|null>{try{const payload=await connectorRequest('/competition',{league:cfg.slug},35_000);return makeCompetitionSchema(cfg).parse(payload.competition);}catch(error){console.error('competition_snapshot_failed',error instanceof Error?error.message:error);return null;}}
 
-export async function syncFromConnector(userId:string,round:number){
-  if(!Number.isInteger(round)||round<1||round>35)throw new Error('Giornata non valida.');
-  console.info('connector_request',{endpoint:endpoint(),secretFingerprint:secretFingerprint()});
-  const payload=await connectorRequest('/sync',{round},30_000);
-  const base=snapshotSchema.parse(payload.snapshot);
-  const competition=await competitionFromConnector();
-  const snapshot=normalize(snapshotSchema.parse(competition?{...base,competition}:base));
-  return {...(await importSnapshots(snapshot,userId)),round:snapshot.round,observedAt:snapshot.observed_at,competitionCaptured:Boolean(competition)};
+export async function syncFromConnector(cfg:LeagueConfig,round:number){
+  if(!Number.isInteger(round)||round<1||round>cfg.roundCount)throw new Error('Giornata non valida.');
+  console.info('connector_request',{endpoint:endpoint(),league:cfg.slug,secretFingerprint:secretFingerprint()});
+  const schema=snapshotSchemaFor(cfg);
+  const payload=await connectorRequest('/sync',{league:cfg.slug,round},30_000);
+  const base=schema.parse(payload.snapshot);
+  const competition=await competitionFromConnector(cfg);
+  const snapshot=normalize(schema.parse(competition?{...base,competition}:base));
+  return {...(await importSnapshots(snapshot,cfg)),round:snapshot.round,observedAt:snapshot.observed_at,competitionCaptured:Boolean(competition)};
 }

@@ -5,7 +5,7 @@ import {PGlite} from '@electric-sql/pglite';
 import {pgcrypto} from '@electric-sql/pglite/contrib/pgcrypto';
 import {makeSnapshotSchema} from '../lib/model.ts';
 import {makeReviewInputSchema} from '../lib/penalties.ts';
-import {leagueConfigFromRows,periodForRound,teamNames} from '../lib/league.ts';
+import {CHEFANTAVITAE10,leagueConfigFromRows,periodForRound,teamNames} from '../lib/league.ts';
 const bootstrap=`create schema extensions; create extension pgcrypto with schema extensions;
 create role anon; create role authenticated; create role service_role bypassrls;
 create schema auth;create table auth.users(id uuid primary key);
@@ -160,6 +160,16 @@ test('TypeScript and SQL read the league contract from the same row',async()=>{
   [JSON.stringify([{id:'d'.repeat(64),body:{...betaBody,expected_total:10,teams:observation.body.teams,inserted:observation.body.inserted}}])]),/invalid_scope/);
 });
 
+// La preset in lib/league.ts è ora solo una fixture: se si scosta dalla riga seedata,
+// i test di dominio misurerebbero una lega che non esiste.
+test('the TypeScript preset still matches the seeded league row',()=>{
+ for(const key of ['id','slug','name','season','competitionId','roundCount','serieAOffset','freeTokens','penaltyAmount','teamCount'])
+  assert.deepEqual(cfgAlpha[key],CHEFANTAVITAE10[key],key);
+ assert.deepEqual(teamNames(cfgAlpha),teamNames(CHEFANTAVITAE10));
+ assert.deepEqual(cfgAlpha.teams.map(t=>t.color),CHEFANTAVITAE10.teams.map(t=>t.color));
+ assert.deepEqual(cfgAlpha.periods,CHEFANTAVITAE10.periods);
+ assert.deepEqual(cfgAlpha.rules,CHEFANTAVITAE10.rules);
+});
 test('a member of one league sees none of the other',async()=>{
  await asUser(betaAdmin,'select fm_import_observations($1::jsonb)',[JSON.stringify([betaObservation])]);
  await asUser(betaAdmin,saveReviewSql,[JSON.stringify({team:'Beta 1',round:1,status:'missed',deadline:'2025-09-01T00:00:00Z',

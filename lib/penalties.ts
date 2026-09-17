@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AGGREGATE_PERIOD,CHEFANTAVITAE10,findPeriod,leaguePath,periodForRound,type LeagueConfig } from './league.ts';
+import { AGGREGATE_PERIOD,findPeriod,leaguePath,periodForRound,type LeagueConfig } from './league.ts';
 
 // Chiave di un periodo della lega, oppure AGGREGATE_PERIOD per l'intera stagione.
 export type Period = string;
@@ -20,7 +20,6 @@ export function makeReviewInputSchema(cfg:LeagueConfig){
       ctx.addIssue({code:z.ZodIssueCode.custom,message:'La fonte deve corrispondere alla giornata della lega: usa il tabellino o la gestione formazioni.'});
   });
 }
-export const reviewInputSchema = makeReviewInputSchema(CHEFANTAVITAE10);
 export type ReviewInput = z.infer<ReturnType<typeof makeReviewInputSchema>>;
 export type Review = Omit<ReviewInput,'expected_revision'> & {id:string;revision:number;recorded_at:string};
 export const serieARound=(cfg:LeagueConfig,round:number)=>{periodForRound(cfg,round);return round+cfg.serieAOffset;};

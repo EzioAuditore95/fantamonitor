@@ -2,6 +2,7 @@
 import { useEffect,useMemo,useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Clock3 } from 'lucide-react';
+import type { LeagueConfig } from '@/lib/league';
 
 type ScheduleRow={round:number;serie_a_round:number;start_at:string|null;source:string;source_url:string|null;updated_at:string};
 type ScheduleResponse={schedule?:ScheduleRow[];error?:string};
@@ -20,7 +21,7 @@ function formatKickoff(value:string){
   return new Intl.DateTimeFormat('it-IT',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'Europe/Rome'}).format(new Date(value));
 }
 
-export default function RoundCountdown(){
+export default function RoundCountdown({config}:{config:LeagueConfig}){
   const [rows,setRows]=useState<ScheduleRow[]>([]);
   const [now,setNow]=useState(()=>Date.now());
   const [target,setTarget]=useState<Element|null>(null);
@@ -30,10 +31,10 @@ export default function RoundCountdown(){
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setTarget(document.querySelector('.league-banner'));
     let active=true;
-    fetch('/api/schedule',{cache:'no-store'}).then(async r=>{const body=await r.json() as ScheduleResponse;if(active&&r.ok)setRows(body.schedule??[]);}).catch(()=>{});
+    fetch(`/api/schedule?league=${encodeURIComponent(config.slug)}`,{cache:'no-store'}).then(async r=>{const body=await r.json() as ScheduleResponse;if(active&&r.ok)setRows(body.schedule??[]);}).catch(()=>{});
     const tick=setInterval(()=>setNow(Date.now()),1000);
     return()=>{active=false;clearInterval(tick)};
-  },[]);
+  },[config.slug]);
   const next=useMemo(()=>rows.filter(r=>r.start_at&&Date.parse(r.start_at)>now).sort((a,b)=>Date.parse(a.start_at!)-Date.parse(b.start_at!))[0]??null,[rows,now]);
   if(!target||!next?.start_at)return null;
   const remaining=Date.parse(next.start_at)-now;

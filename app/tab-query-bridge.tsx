@@ -13,7 +13,7 @@ const labels:Record<string,string>={
 export default function TabQueryBridge(){
   const pathname=usePathname();
   useEffect(()=>{
-    if(pathname!=='/')return;
+    if(!/^\/l\/[^/]+\/?$/.test(pathname))return;
     const requested=new URLSearchParams(window.location.search).get('tab');
     const label=requested?labels[requested]:undefined;
     if(!label)return;

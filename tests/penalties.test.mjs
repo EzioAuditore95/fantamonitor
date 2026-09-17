@@ -1,8 +1,9 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {serieARound,teamBalance,balances,reviewInputSchema} from '../lib/penalties.ts';
+import {serieARound,teamBalance,balances,makeReviewInputSchema} from '../lib/penalties.ts';
 import {AGGREGATE_PERIOD,CHEFANTAVITAE10,makeLeagueConfig,periodForRound} from '../lib/league.ts';
 const cfg=CHEFANTAVITAE10;
+const reviewInputSchema=makeReviewInputSchema(cfg);
 const team='Real Hasbulla';
 const make=(round,status='missed',revision=1)=>({id:`${round}-${revision}`,team,round,status,revision,deadline:'2025-09-01T12:00:00Z',note:'Log della formazione verificato.',source_url:`https://leghe.fantacalcio.it/chefantavitae10/view/competition/337500/manage-lineups/${round}`,recorded_at:'2025-09-02T12:00:00Z'});
 test('split Serie A: league round 16 = A19, round 17 = A20',()=>{

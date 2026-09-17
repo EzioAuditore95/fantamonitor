@@ -36,7 +36,8 @@ npm ci && npx tsc --noEmit && npm run lint && node --test prototype/tests/collec
 ```
 Browser ──► Next.js App Router (app/)
              ├─ proxy.ts            middleware Next 16: rinnova i cookie Supabase
-             ├─ app/auth.ts         getAppUser() → {userId,email,role}
+             ├─ app/auth.ts         getAppUser() · requireLeagueMember(slug)
+             ├─ app/l/[slug]/*      dashboard, stats, lineup-analytics della lega
              ├─ app/api/*/route.ts  archive · reviews · sync · schedule · performance · auth/logout
              └─ lib/*               modello Zod, regole penalità, calcoli, client Supabase
                         │
@@ -54,9 +55,13 @@ Browser ──► Next.js App Router (app/)
 
 ### Livelli
 
-- **`app/`** — pagine RSC + componenti client densi. `page.tsx` (dashboard), `stats/`,
-  `lineup-analytics/`, `login/`. La UI è a tab (`Dashboard`) più due route secondarie
+- **`app/`** — pagine RSC + componenti client densi. `app/l/[slug]/` contiene dashboard,
+  `stats/` e `lineup-analytics/` della lega; `app/page.tsx` reindirizza alla lega dell'utente
+  (o mostra il selettore). La `LeagueConfig` arriva ai componenti client **come prop da RSC**,
+  non da un context né da un endpoint. La UI è a tab (`Dashboard`) più due route secondarie
   con `global-bottom-nav` e `tab-query-bridge` per il ritorno alla tab richiesta.
+- Ogni route API prende la lega da `?league=<slug>` (`/api/sync` dal body) e la risolve con
+  `requireLeagueMember`, che concentra 401 / 403 / 404.
 - **`lib/`** — logica pura e accesso dati:
   - `league.ts` — `LeagueConfig` e la preset `CHEFANTAVITAE10`: squadre, colori, giornate,
     periodi, gettoni gratuiti e importo della penale. **Unica sorgente delle costanti di lega.**
@@ -174,8 +179,13 @@ superato — la storia git li conserva, il repo no.
 
 ## Trappole note
 
-- `proxy.ts` è il middleware di Next 16 (esporta `proxy`, non `middleware`) e copre solo
-  `/`, `/login`, `/api/*`. Nuove route protette vanno aggiunte al `matcher`.
+- `proxy.ts` è il middleware di Next 16 (esporta `proxy`, non `middleware`) e copre `/`,
+  `/login`, `/l/*`, `/api/*`. Nuove route protette vanno aggiunte al `matcher`: se manca,
+  i cookie Supabase smettono di rinfrescarsi e compaiono 401 sporadici dopo circa un'ora.
+- `TabQueryBridge` ripristina la tab facendo **DOM scraping** sulle label italiane dei
+  bottoni `.main-tabs`, ed è attivo solo su `/l/{slug}`. Da qui due vincoli: **mai mettere il
+  nome della lega dentro una label di tab**, e non convertire gli `<a>` in `<Link>` — l'effect
+  è agganciato a `[pathname]` e i reload completi tra route sono strutturali e voluti.
 - I Server Component non possono scrivere cookie: `lib/supabase/server.ts` ignora
   l'errore di scrittura e lascia il refresh al proxy. Non "sistemare" quel `catch` vuoto.
 - Senza variabili Supabase l'app **non** va in errore: `supabaseConfigured()` mostra lo

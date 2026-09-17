@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import type { Review } from './penalties';
-import { CHEFANTAVITAE10,teamNames,type LeagueConfig } from './league.ts';
-export const TEAM_NAMES = teamNames(CHEFANTAVITAE10);
+import { teamNames,type LeagueConfig } from './league.ts';
 
 const playerSchema=z.object({
   id:z.union([z.string(),z.number()]).optional(),
@@ -70,8 +69,6 @@ export function snapshotSchemaFor(cfg:LeagueConfig){
   const cached=schemaCache.get(key);if(cached)return cached;
   const schema=makeSnapshotSchema(cfg);schemaCache.set(key,schema);return schema;
 }
-export const competitionSchema=makeCompetitionSchema(CHEFANTAVITAE10);
-export const snapshotSchema=snapshotSchemaFor(CHEFANTAVITAE10);
 export type Competition=z.infer<ReturnType<typeof makeCompetitionSchema>>;
 export type Snapshot=z.infer<ReturnType<typeof makeSnapshotSchema>>;
 export type TeamSnapshot=Snapshot['teams'][number];

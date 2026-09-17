@@ -1,10 +1,11 @@
-import { getAppUser } from '@/app/auth';
+import { requireLeagueMember } from '@/app/auth';
 import { saveReview, ReviewConflict } from '@/lib/reviews';
 import { ZodError } from 'zod';
 const headers={'Cache-Control':'private, no-store'};
 export async function POST(request:Request){
-  const user=await getAppUser();
-  if(!user)return Response.json({error:'Accesso richiesto.'},{status:401,headers});
+  const ctx=await requireLeagueMember(new URL(request.url).searchParams.get('league'));
+  if(ctx instanceof Response)return ctx;
+  const {user,cfg}=ctx;
   if(user.role!=='admin')return Response.json({error:'Operazione riservata all’amministratore.'},{status:403,headers});
   if(request.headers.get('origin')!==new URL(request.url).origin)return Response.json({error:'Origine non autorizzata.'},{status:403,headers});
   if(!request.headers.get('content-type')?.startsWith('application/json'))return Response.json({error:'Formato JSON richiesto.'},{status:415,headers});
@@ -13,7 +14,7 @@ export async function POST(request:Request){
     let size=0;const chunks:Uint8Array[]=[];
     while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>16384){await reader.cancel();return Response.json({error:'Esito troppo grande.'},{status:413,headers});}chunks.push(value);}
     const bytes=new Uint8Array(size);let pos=0;for(const c of chunks){bytes.set(c,pos);pos+=c.length;}
-    return Response.json(await saveReview(JSON.parse(new TextDecoder().decode(bytes)),user.userId),{headers});
+    return Response.json(await saveReview(JSON.parse(new TextDecoder().decode(bytes)),cfg),{headers});
   }catch(e){
     if(e instanceof ZodError)return Response.json({error:e.issues[0]?.message??'Esito non valido.'},{status:422,headers});
     if(e instanceof SyntaxError)return Response.json({error:'JSON non valido.'},{status:400,headers});

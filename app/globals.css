@@ -93,6 +93,12 @@ button:focus-visible,a:focus-visible { outline:3px solid var(--brand-orange); ou
 .league-label strong { display:block; color:var(--brand-navy); font-size:1.2rem; line-height:1.3 }
 .season { display:block; color:var(--muted-foreground); font-size:.8125rem; margin-top:3px }
 .league-mode { color:var(--brand-blue); font-size:.8125rem; font-weight:700; border:1px solid #cbd8e8; padding:5px 12px; border-radius:4px; background:#fff; letter-spacing:.04em }
+/* Il selettore compare solo con più di una lega: server-rendered, senza stato client. */
+.league-switch { display:flex; align-items:center; gap:8px; list-style:none; margin:0; padding:0; flex-wrap:wrap }
+.league-switch a { display:inline-flex; align-items:center; min-height:34px; padding:5px 12px; border-radius:4px; border:1px solid #cbd8e8; background:#fff; color:var(--brand-blue); font-size:.8125rem; font-weight:700; text-decoration:none }
+.league-switch a[aria-current=page] { background:var(--brand-navy); border-color:var(--brand-navy); color:#fff }
+.league-picker { list-style:none; margin:18px 0 0; padding:0; display:grid; gap:10px; width:100% }
+.league-picker a { display:block; padding:13px 16px; border-radius:6px; border:1px solid #cbd8e8; background:#fff; color:var(--brand-navy); font-weight:700; text-decoration:none }
 .muted { color:var(--muted-foreground) } .micro { font-size:.8125rem }
 .eyebrow { font-size:.8125rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted-foreground) }
 .navigation { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:0 18px; background:#fff; border:1px solid var(--border); border-radius:6px; margin-bottom:28px; box-shadow:0 2px 4px #16355a05 }
@@ -117,7 +123,7 @@ button:focus-visible,a:focus-visible { outline:3px solid var(--brand-orange); ou
 .score-number strong { font-weight:700; color:#fff }
 .score-number span { font-size:2.5rem; color:#b6cce6; font-weight:400; letter-spacing:-.03em; margin-left:12px }
 .score-caption { margin:0; font-size:1rem; color:#e5eef9 }
-.team-bars { display:grid; grid-template-columns:repeat(10,minmax(0,1fr)); gap:6px; margin-top:19px }
+.team-bars { display:grid; grid-template-columns:repeat(10,minmax(0,1fr)); gap:6px; margin-top:19px } /* fallback: la dashboard imposta le colonne dal numero di squadre */
 .team-bar { height:14px; border-radius:2px; background:#315fb6; border:1px solid #9db4d0; padding:0 }
 .team-bar.present { background:#fff; border-color:#fff }
 .legend { display:flex; gap:18px; flex-wrap:wrap; font-size:.8125rem; color:var(--muted-foreground); margin-top:12px }
