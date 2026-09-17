@@ -1,15 +1,22 @@
 import {test,after} from 'node:test';
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
+import {readdir,readFile} from 'node:fs/promises';
 import {PGlite} from '@electric-sql/pglite';
+import {pgcrypto} from '@electric-sql/pglite/contrib/pgcrypto';
 import {TEAM_NAMES,snapshotSchema} from '../lib/model.ts';
 import {reviewInputSchema,halfForRound} from '../lib/penalties.ts';
-const db=new PGlite();
-await db.exec(`create role anon; create role authenticated; create role service_role bypassrls;
+const db=new PGlite({extensions:{pgcrypto}});
+await db.exec(`create schema extensions; create extension pgcrypto with schema extensions;
+create role anon; create role authenticated; create role service_role bypassrls;
 create schema auth;create table auth.users(id uuid primary key);
 create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
 grant usage on schema auth to authenticated;grant execute on function auth.uid() to authenticated;`);
-try { await db.exec(await readFile(new URL('../supabase/migrations/202609100001_fantamonitor.sql',import.meta.url),'utf8')); } catch(e) { console.error({message:e.message,position:e.position,where:e.where,detail:e.detail});process.exit(1); }
+const migrationsUrl=new URL('../supabase/migrations/',import.meta.url);
+const migrations=(await readdir(migrationsUrl)).filter(name=>name.endsWith('.sql')).sort();
+for(const migration of migrations){
+ try { await db.exec(await readFile(new URL(migration,migrationsUrl),'utf8')); }
+ catch(e) { console.error({migration,message:e.message,position:e.position,where:e.where,detail:e.detail});process.exit(1); }
+}
 const admin='00000000-0000-4000-8000-000000000001',viewer='00000000-0000-4000-8000-000000000002',stranger='00000000-0000-4000-8000-000000000003';
 await db.query('insert into auth.users values ($1),($2),($3)',[admin,viewer,stranger]);
 await db.query("insert into fm_members values ($1,'admin'),($2,'viewer')",[admin,viewer]);
@@ -17,6 +24,20 @@ async function asUser(id,sql,args=[]){await db.exec('set role authenticated');aw
 const fixture=JSON.parse(await readFile(new URL('../prototype/tests/fixture.json',import.meta.url),'utf8'));
 const observation={id:'a'.repeat(64),body:{...fixture,observed_at:'2025-09-01T00:00:00.000Z'}};
 const review={team:'Real Hasbulla',round:1,status:'missed',deadline:'2025-09-01T00:00:00Z',note:'Log della formazione verificato.',source_url:'https://leghe.fantacalcio.it/chefantavitae10/view/competition/337500/manage-lineups/1'};
+test('all expected bot RPCs exist after running every migration',async()=>{
+ const expected=['fm_bot_import_snapshot','fm_current_round_for_bot','fm_get_telegram_message','fm_next_round_for_bot','fm_upsert_telegram_message'];
+ const result=await db.query(`select p.proname
+  from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+  where n.nspname='public' and p.proname=any($1::text[])
+  order by p.proname`,[expected]);
+ assert.deepEqual(result.rows.map(row=>row.proname),expected);
+});
+test('the production reconciliation migration is safe to reapply',async()=>{
+ const migration=migrations.find(name=>name.endsWith('_reconcile_bot_rpcs.sql'));
+ assert.ok(migration);
+ await db.exec(await readFile(new URL(migration,migrationsUrl),'utf8'));
+ assert.equal((await db.query("select count(*)::int as n from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname like 'fm_%_for_bot'")).rows[0].n,2);
+});
 test('admin import is atomic and idempotent',async()=>{
  const sql='select fm_import_observations($1::jsonb) as result';
  assert.deepEqual((await asUser(admin,sql,[JSON.stringify([observation])])).rows[0].result,{imported:1,duplicates:0});
