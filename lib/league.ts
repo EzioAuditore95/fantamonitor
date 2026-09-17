@@ -60,3 +60,20 @@ export function teamColor(cfg:LeagueConfig,name:string):string{
   let hash=0;for(const char of name)hash=(hash*31+char.charCodeAt(0))|0;
   return `hsl(${Math.abs(hash)%360} 62% 78%)`;
 }
+
+// Mappatura riga → config: la usano sia i test su PGlite sia l'app su Supabase, così
+// TypeScript e SQL leggono la stessa riga invece di tenere due copie del contratto.
+export type LeagueRow={id:string;slug:string;name:string;season:string;competition_id:string;
+  round_count:number;serie_a_offset:number;period_mode:LeaguePeriodMode;first_half_end:number|null;
+  free_tokens:number;penalty_amount:number;rules:Record<string,unknown>|null;updated_at:string|Date};
+export type LeagueTeamRow={name:string;position:number;color:string|null;fantacalcio_team_id?:number|null};
+export function leagueConfigFromRows(row:LeagueRow,teams:LeagueTeamRow[]):LeagueConfig{
+  return makeLeagueConfig({
+    id:row.id,slug:row.slug,name:row.name,season:row.season,competitionId:row.competition_id,
+    teams:[...teams].sort((a,b)=>a.position-b.position).map(t=>({name:t.name,position:t.position,color:t.color??'',fantacalcioTeamId:t.fantacalcio_team_id??undefined})),
+    roundCount:Number(row.round_count),serieAOffset:Number(row.serie_a_offset),
+    periodMode:row.period_mode,firstHalfEnd:row.first_half_end==null?null:Number(row.first_half_end),
+    freeTokens:Number(row.free_tokens),penaltyAmount:Number(row.penalty_amount),
+    rules:row.rules??{},updatedAt:new Date(row.updated_at).toISOString(),
+  });
+}

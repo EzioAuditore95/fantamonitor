@@ -42,7 +42,8 @@ Browser ──► Next.js App Router (app/)
                         │
                         ▼
               Supabase (Postgres + Auth + RLS)
-              tabelle fm_*  ·  RPC fm_import_observations / fm_save_review / fm_*_auto_sync
+              fm_leagues / fm_league_teams / fm_memberships = configurazione e scope
+              tabelle fm_* con league_id  ·  RPC fm_import_observations / fm_save_review / fm_*_auto_sync
                         ▲
                         │  (auto-sync: Supabase REST + chiave SHA-256)
               Connettore Railway (connector/, Node + Playwright)
@@ -66,8 +67,9 @@ Browser ──► Next.js App Router (app/)
   - `archive.ts` / `reviews.ts` — letture paginate (500/pagina) e scritture via RPC.
   - `sync.ts` — chiamate firmate al connettore.
   - `performance.ts` / `lineup-analytics.ts` — calcoli puri, nessun I/O.
-- **`supabase/migrations/`** — sorgente di verità dello schema. Le RPC replicano in SQL
-  la validazione fatta in Zod.
+- **`supabase/migrations/`** — sorgente di verità dello schema. Le RPC leggono i limiti da
+  `fm_leagues` e replicano in SQL la validazione fatta in Zod; `lib/league.ts` legge la
+  stessa riga tramite `leagueConfigFromRows`.
 - **`connector/`** — servizio Node separato (deploy Railway) che fa login su Fantacalcio
   con Playwright, cattura formazioni e competizione, notifica su Telegram ed esegue
   l'auto-sync a checkpoint. Ha un proprio `package.json`; non fa parte della build Next.
@@ -112,8 +114,10 @@ Ogni route API ripete, in quest'ordine:
 Altre regole ferme:
 
 - La web app usa **solo** la publishable key. Nessuna service-role key, mai.
-- Ogni tabella `fm_*` ha RLS: lettura ai membri, scrittura solo tramite RPC
-  `security definer` che ricontrollano `fm_is_admin()`.
+- Ogni tabella `fm_*` ha RLS **per lega**: `league_id=any((select fm_my_league_ids())::uuid[])`,
+  scrittura solo tramite RPC `security definer` che ricontrollano `fm_is_admin(league_id)`.
+  Le versioni senza argomento di `fm_is_member` / `fm_is_admin` sono state eliminate apposta:
+  come overload avrebbero lasciato compilare una policy che apre tutte le leghe.
 - Traffico app ⇄ connettore firmato **in entrambe le direzioni** con HMAC-SHA256 su
   `${timestamp}.${body}`, confronto con `timingSafeEqual`, finestra 120 s, risposta
   limitata a 512 KB. Non sostituire con confronti `===`.
@@ -152,10 +156,13 @@ una, aggiornare tutte:
 
 | Costante | Punti |
 |---|---|
-| Elenco delle 10 squadre | `lib/league.ts` (`CHEFANTAVITAE10.teams`), `connector/server.mjs`, `connector/phase2-patch.mjs`, `prototype/collector.mjs`, SQL `fm_valid_team()` |
-| Intervallo giornate 1–35 | `lib/league.ts` (`roundCount`), entrambe le migrazioni, `connector/server.mjs` |
-| Pattern `source_url` della lega | `lib/league.ts` (`leaguePath`), `fm_import_observations`, `fm_save_review`, `fm_complete_auto_sync`, `fm_bot_import_snapshot` (regex SQL) |
-| Scope lega/stagione/competizione | `lib/league.ts`, `fm_import_observations`, `fm_complete_auto_sync`, `fm_bot_import_snapshot`, `connector/*` |
+| Elenco squadre | riga `fm_league_teams` ⇄ preset `lib/league.ts`; **copie residue** in `connector/server.mjs`, `connector/phase2-patch.mjs`, `prototype/collector.mjs` |
+| Intervallo giornate | `fm_leagues.round_count` ⇄ `lib/league.ts`; **copia residua** in `connector/server.mjs` |
+| Pattern `source_url` | `fm_leagues.slug`+`competition_id` ⇄ `leaguePath()`; **copie residue** nel connettore |
+| Scope lega/stagione/competizione | `fm_leagues` ⇄ `lib/league.ts`; **copie residue** in `connector/*` |
+
+SQL e TypeScript non sono più due copie da confrontare: leggono la **stessa riga**. Restano
+da allineare a mano solo il connettore e `prototype/collector.mjs`.
 
 ## Storia della piattaforma
 
@@ -188,6 +195,15 @@ superato — la storia git li conserva, il repo no.
 - `tests/postgres.test.mjs` esegue le migrazioni in PGlite con ruoli e `auth.uid()`
   simulati: **ogni nuova migrazione deve poter girare lì**, quindi niente costrutti
   esclusivi di Supabase non emulabili. Usa `prototype/tests/fixture.json` come snapshot valido.
+- Nelle policy RLS il cast è obbligatorio: `any((select fm_my_league_ids()))` fa leggere al
+  parser la forma sotto-query e confronta `uuid` con `uuid[]`. Serve
+  `any((select fm_my_league_ids())::uuid[])`, che resta un InitPlan valutato una volta per
+  query. La forma `fm_is_member(league_id)` dentro una policy sarebbe invece una sotto-query
+  correlata, valutata per riga.
+- `fm_default_league()` è un ponte temporaneo: risolve l'unica lega attiva e restituisce
+  `null` (quindi `league_required`) appena ce ne sono due. Lo usano le RPC che il connettore
+  chiama ancora con la firma originale e lo shim a 2 argomenti di `fm_save_review`. Va
+  rimosso quando il connettore passerà la lega esplicitamente.
 - Dentro `lib/` gli import **di valore** fra moduli usano l'estensione `.ts` esplicita
   (`from './league.ts'`): `node --experimental-strip-types` gira in ESM e non riscrive le
   estensioni, quindi senza di essa i test falliscono con `ERR_MODULE_NOT_FOUND`. Da qui
