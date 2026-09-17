@@ -5,6 +5,7 @@ import { CalendarDays,Clock3,Crown,Flag,Medal,Trophy,TriangleAlert } from 'lucid
 import { Select,SelectContent,SelectItem,SelectTrigger,SelectValue } from '@/components/ui/select';
 import { TEAM_NAMES,type Archive } from '@/lib/model';
 import { balances } from '@/lib/penalties';
+import { AGGREGATE_PERIOD,CHEFANTAVITAE10 } from '@/lib/league';
 import styles from './competition-panel.module.css';
 
 type Match={homeId:number;awayId:number;home:string;away:string;homeFantasy:number|null;awayFantasy:number|null;homeStandingPoints:number|null;awayStandingPoints:number|null;homeGoals:number|null;awayGoals:number|null;result:string|null;resultSR:string|null};
@@ -43,7 +44,7 @@ export default function CompetitionPanel(){
   const qualificationLocked=firstHalfCalculated>=FIRST_HALF_END;
   const euroStanding=useMemo(()=>data?standingsThrough(data.calendar,FIRST_HALF_END):[],[data]);
   const champions=euroStanding.slice(0,5),europa=euroStanding.slice(5,10);
-  const trackedFines=archive?balances([...TEAM_NAMES],'complessivo',archive.reviews??[]).reduce((sum,x)=>sum+x.penalty,0):0;
+  const trackedFines=archive?balances(CHEFANTAVITAE10,[...TEAM_NAMES],AGGREGATE_PERIOD,archive.reviews??[]).reduce((sum,x)=>sum+x.penalty,0):0;
   const formulaOnePot=FORMULA_ONE_BASE+trackedFines;
   if(loading)return <section className="panel"><p>Caricamento calendario ufficiale…</p></section>;
   if(error)return <div className="error-banner"><TriangleAlert size={20}/><span>{error}</span></div>;

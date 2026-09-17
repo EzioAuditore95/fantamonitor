@@ -2,20 +2,21 @@
 
 import { useEffect,useMemo,useState } from 'react';
 import { ArrowLeft,BarChart3,Repeat2,Users,Shirt,Layers3,TriangleAlert } from 'lucide-react';
-import { TEAM_COLORS,TEAM_NAMES,initials,type Archive } from '@/lib/model';
+import { initials,type Archive } from '@/lib/model';
+import { CHEFANTAVITAE10,teamColor,teamNames } from '@/lib/league';
 import type { PerformancePayload } from '@/lib/performance';
 import { computeLineupAnalytics } from '@/lib/lineup-analytics';
 import styles from './page.module.css';
 
 function pct(v:number|null){return v==null?'—':`${Math.round(v*100)}%`;}
 function num(v:number|null,digits=1){return v==null?'—':new Intl.NumberFormat('it-IT',{maximumFractionDigits:digits,minimumFractionDigits:digits}).format(v);}
-function Crest({name}:{name:string}){return <span className="crest" style={{backgroundColor:TEAM_COLORS[TEAM_NAMES.indexOf(name)]}}>{initials(name)}</span>}
+function Crest({name}:{name:string}){return <span className="crest" style={{backgroundColor:teamColor(CHEFANTAVITAE10,name)}}>{initials(name)}</span>}
 
 export default function LineupAnalyticsPage(){
   const [archive,setArchive]=useState<Archive|null>(null),[performance,setPerformance]=useState<PerformancePayload|null>(null);
   const [loading,setLoading]=useState(true),[error,setError]=useState('');
   useEffect(()=>{let active=true;(async()=>{try{const [a,p]=await Promise.all([fetch('/api/archive',{cache:'no-store'}),fetch('/api/performance',{cache:'no-store'})]);const ad=await a.json() as Archive&{error?:string};const pd=await p.json() as PerformancePayload&{error?:string};if(!a.ok)throw new Error(ad.error||'Archivio non disponibile.');if(active){setArchive(ad);if(p.ok)setPerformance(pd);}}catch(e){if(active)setError(e instanceof Error?e.message:'Analisi non disponibili.');}finally{if(active)setLoading(false);}})();return()=>{active=false};},[]);
-  const rows=useMemo(()=>archive?computeLineupAnalytics(archive,performance):[],[archive,performance]);
+  const rows=useMemo(()=>archive?computeLineupAnalytics(teamNames(CHEFANTAVITAE10),archive,performance):[],[archive,performance]);
   const withData=rows.filter(r=>r.rounds>0);
   const mostStable=[...withData].filter(r=>r.continuity!=null).sort((a,b)=>(b.continuity??0)-(a.continuity??0))[0];
   const mostRotating=[...withData].filter(r=>r.avgChanges!=null).sort((a,b)=>(b.avgChanges??0)-(a.avgChanges??0))[0];

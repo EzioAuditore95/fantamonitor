@@ -57,8 +57,12 @@ Browser ──► Next.js App Router (app/)
   `lineup-analytics/`, `login/`. La UI è a tab (`Dashboard`) più due route secondarie
   con `global-bottom-nav` e `tab-query-bridge` per il ritorno alla tab richiesta.
 - **`lib/`** — logica pura e accesso dati:
-  - `model.ts` — `snapshotSchema` (Zod) = contratto di una lettura; `TEAM_NAMES`, `TEAM_COLORS`, `canonical()`.
-  - `penalties.ts` — regola gettoni/penalità e `reviewInputSchema`.
+  - `league.ts` — `LeagueConfig` e la preset `CHEFANTAVITAE10`: squadre, colori, giornate,
+    periodi, gettoni gratuiti e importo della penale. **Unica sorgente delle costanti di lega.**
+  - `model.ts` — `makeSnapshotSchema(cfg)` = contratto di una lettura; `canonical()`.
+    `snapshotSchema` / `TEAM_NAMES` restano come derivati dalla preset.
+  - `penalties.ts` — regola gettoni/penalità e `makeReviewInputSchema(cfg)`, entrambe
+    parametriche sulla `LeagueConfig`.
   - `archive.ts` / `reviews.ts` — letture paginate (500/pagina) e scritture via RPC.
   - `sync.ts` — chiamate firmate al connettore.
   - `performance.ts` / `lineup-analytics.ts` — calcoli puri, nessun I/O.
@@ -73,10 +77,14 @@ Browser ──► Next.js App Router (app/)
 
 ## Regole di dominio (non modificare senza richiesta esplicita)
 
-- Giornate di **lega** 1–35; giornata Serie A = `round + 3` (`serieARound`).
-  Girone **andata** = round 1–16, **ritorno** = round 17–35.
-- Ogni squadra ha **un gettone per girone**: la prima omissione verificata è gratuita,
-  ogni successiva costa 5 € → `max(0, omissioni - 1) * 5`, calcolato per girone.
+I valori qui sotto sono quelli della preset `CHEFANTAVITAE10` in `lib/league.ts`: la regola
+è parametrica, ma **per questa lega gli esiti non devono cambiare mai**.
+
+- Giornate di **lega** 1–35 (`roundCount`); giornata Serie A = `round + serieAOffset` (3).
+  Girone **andata** = round 1–16 (`firstHalfEnd`), **ritorno** = round 17–35.
+- Ogni squadra ha **un gettone per periodo** (`freeTokens`): la prima omissione verificata è
+  gratuita, ogni successiva costa 5 € (`penaltyAmount`) →
+  `max(0, omissioni - freeTokens) * penaltyAmount`, calcolato per periodo.
   I gettoni **non** si trasferiscono tra gironi; il "complessivo" è solo la somma.
 - Il gettone si assegna alla **prima omissione in ordine di giornata**, anche con
   inserimenti retroattivi (non in ordine di importazione).
@@ -144,10 +152,10 @@ una, aggiornare tutte:
 
 | Costante | Punti |
 |---|---|
-| Elenco delle 10 squadre | `lib/model.ts` (`TEAM_NAMES`), `connector/server.mjs`, `connector/phase2-patch.mjs`, `prototype/collector.mjs`, SQL `fm_valid_team()` |
-| Intervallo giornate 1–35 | `lib/model.ts`, `lib/penalties.ts`, entrambe le migrazioni, `connector/server.mjs` |
-| Pattern `source_url` della lega | `lib/model.ts`, `lib/penalties.ts`, `fm_import_observations` (regex SQL) |
-| Scope lega/stagione/competizione | `lib/model.ts` (letterali Zod), `fm_import_observations`, `connector/*` |
+| Elenco delle 10 squadre | `lib/league.ts` (`CHEFANTAVITAE10.teams`), `connector/server.mjs`, `connector/phase2-patch.mjs`, `prototype/collector.mjs`, SQL `fm_valid_team()` |
+| Intervallo giornate 1–35 | `lib/league.ts` (`roundCount`), entrambe le migrazioni, `connector/server.mjs` |
+| Pattern `source_url` della lega | `lib/league.ts` (`leaguePath`), `fm_import_observations`, `fm_save_review`, `fm_complete_auto_sync`, `fm_bot_import_snapshot` (regex SQL) |
+| Scope lega/stagione/competizione | `lib/league.ts`, `fm_import_observations`, `fm_complete_auto_sync`, `fm_bot_import_snapshot`, `connector/*` |
 
 ## Storia della piattaforma
 
@@ -180,6 +188,15 @@ superato — la storia git li conserva, il repo no.
 - `tests/postgres.test.mjs` esegue le migrazioni in PGlite con ruoli e `auth.uid()`
   simulati: **ogni nuova migrazione deve poter girare lì**, quindi niente costrutti
   esclusivi di Supabase non emulabili. Usa `prototype/tests/fixture.json` come snapshot valido.
+- Dentro `lib/` gli import **di valore** fra moduli usano l'estensione `.ts` esplicita
+  (`from './league.ts'`): `node --experimental-strip-types` gira in ESM e non riscrive le
+  estensioni, quindi senza di essa i test falliscono con `ERR_MODULE_NOT_FOUND`. Da qui
+  `allowImportingTsExtensions` in `tsconfig.json`. Gli import da `app/` restano `@/lib/...`.
+- L'id di `fm_observations` è calcolato con **due algoritmi divergenti**: `lib/archive.ts`
+  usa `canonical()` (chiavi ordinate da JS), mentre `fm_complete_auto_sync` e
+  `fm_bot_import_snapshot` usano `digest(sample::text)` (ordinamento di Postgres). Lo stesso
+  snapshot importato dalla UI e dal bot ottiene due id diversi: non corrompe nulla solo
+  perché la deduplica è su `(round, observed_at)`. Difetto noto, non correggerlo di sfuggita.
 - `.github/workflows/auto-sync.yml` è `workflow_dispatch` (nessun cron). Il pinning
   `EzioAuditore95/fantamonitor` + `refs/heads/main` è verificato lato connettore.
 - Dati reali (`lib/data/`, `prototype/data/`) sono fuori dal repo: non ricrearli né

@@ -1,4 +1,4 @@
-import { TEAM_NAMES,type Archive,type Snapshot } from './model';
+import type { Archive,Snapshot } from './model';
 import type { MatchResult,PerformancePayload } from './performance';
 
 type PlayerRef={id?:string|number;name:string;role?:string};
@@ -37,10 +37,10 @@ function fantasyFor(match:MatchResult,name:string){
   return null;
 }
 
-export function computeLineupAnalytics(archive:Archive,performance?:PerformancePayload|null):TeamLineupAnalytics[]{
+export function computeLineupAnalytics(teams:string[],archive:Archive,performance?:PerformancePayload|null):TeamLineupAnalytics[]{
   const latest=latestByRound(archive.snapshots);
   const matches=performance?.matches??[];
-  return TEAM_NAMES.map(name=>{
+  return teams.map(name=>{
     const lineups:[number,NonNullable<Snapshot['teams'][number]['formation']>][]=[];
     for(const [round,s] of [...latest.entries()].sort((a,b)=>a[0]-b[0])){
       const team=s.teams.find(t=>t.name===name);

@@ -1,4 +1,3 @@
-import { TEAM_NAMES } from './model';
 
 export type MatchResult = {
   round: number;
@@ -70,9 +69,10 @@ const mean=(values:number[])=>values.length?values.reduce((a,b)=>a+b,0)/values.l
 const std=(values:number[])=>{if(values.length<2)return 0;const m=mean(values);return Math.sqrt(mean(values.map(v=>(v-m)**2)));};
 function normalize(values:number[],value:number,invert=false){if(!values.length)return 50;const min=Math.min(...values),max=Math.max(...values);if(max===min)return 50;const n=((value-min)/(max-min))*100;return invert?100-n:n;}
 
-export function computePerformance(payload:PerformancePayload):TeamPerformance[]{
-  const completed=[...payload.matches].filter(m=>TEAM_NAMES.includes(m.home)&&TEAM_NAMES.includes(m.away)).sort((a,b)=>a.round-b.round);
-  const preliminary=TEAM_NAMES.map(name=>{
+export function computePerformance(teams:string[],payload:PerformancePayload):TeamPerformance[]{
+  const names=new Set(teams);
+  const completed=[...payload.matches].filter(m=>names.has(m.home)&&names.has(m.away)).sort((a,b)=>a.round-b.round);
+  const preliminary=teams.map(name=>{
     const games=completed.filter(m=>m.home===name||m.away===name);
     const results=games.map(m=>{
       const home=m.home===name;

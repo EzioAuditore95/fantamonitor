@@ -4,7 +4,8 @@ import {readdir,readFile} from 'node:fs/promises';
 import {PGlite} from '@electric-sql/pglite';
 import {pgcrypto} from '@electric-sql/pglite/contrib/pgcrypto';
 import {TEAM_NAMES,snapshotSchema} from '../lib/model.ts';
-import {reviewInputSchema,halfForRound} from '../lib/penalties.ts';
+import {reviewInputSchema} from '../lib/penalties.ts';
+import {CHEFANTAVITAE10,periodForRound} from '../lib/league.ts';
 const db=new PGlite({extensions:{pgcrypto}});
 await db.exec(`create schema extensions; create extension pgcrypto with schema extensions;
 create role anon; create role authenticated; create role service_role bypassrls;
@@ -82,12 +83,12 @@ test('TypeScript and SQL agree on the league contract',async()=>{
 
  const importSql='select fm_import_observations($1::jsonb)';
  for(const round of [0,36]){
-  assert.throws(()=>halfForRound(round));
+  assert.throws(()=>periodForRound(CHEFANTAVITAE10,round));
   assert.equal(snapshotSchema.safeParse({...observation.body,round}).success,false);
   await assert.rejects(asUser(admin,importSql,[JSON.stringify([{...observation,body:{...observation.body,round}}])]),/invalid_round_time/);
   await assert.rejects(asUser(admin,'select fm_save_review($1::jsonb,0)',[JSON.stringify({...review,round})]),/invalid_review_scope/);
  }
- for(const round of [1,35])assert.doesNotThrow(()=>halfForRound(round));
+ for(const round of [1,35])assert.doesNotThrow(()=>periodForRound(CHEFANTAVITAE10,round));
 
  // An accepted source reaches the revision check; a rejected one never gets that far.
  const prefix='https://leghe.fantacalcio.it/chefantavitae10/view/competition/337500';

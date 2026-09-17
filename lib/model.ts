@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { Review } from './penalties';
-export const TEAM_NAMES = ['AC Idovalproico','Atletico Fontanelle','FC LBVLA','FC SEMINI','FC Villaggio Mau Mau','FDS Sballo','I PIPPISTRELLI','Pro Spritz','Real Hasbulla','Salamandre'];
-export const TEAM_COLORS = ['#b6a1f7','#efa88d','#8bb8f6','#e4bc6e','#91cdd0','#afbcf3','#d4ee8a','#f0a0b8','#c3e878','#b9a6ec'];
+import { CHEFANTAVITAE10,teamNames,type LeagueConfig } from './league.ts';
+export const TEAM_NAMES = teamNames(CHEFANTAVITAE10);
 
 const playerSchema=z.object({
   id:z.union([z.string(),z.number()]).optional(),
@@ -31,35 +31,49 @@ const competitionMatchSchema=z.object({
   homeFantasy:z.number().nullable(),awayFantasy:z.number().nullable(),homeStandingPoints:z.number().nullable(),awayStandingPoints:z.number().nullable(),
   homeGoals:z.number().int().nullable(),awayGoals:z.number().int().nullable(),result:z.string().nullable(),resultSR:z.string().nullable(),
 }).strict();
-const competitionRoundSchema=z.object({round:z.number().int().min(1).max(35),championshipRound:z.number().int().min(1).max(38),calculated:z.boolean(),matches:z.array(competitionMatchSchema).length(5)}).strict();
-const resultMatchSchema=z.object({round:z.number().int().min(1).max(35),home:z.string(),away:z.string(),homeGoals:z.number().int(),awayGoals:z.number().int(),homeFantasy:z.number().nullable(),awayFantasy:z.number().nullable()}).strict();
 const standingSchema=z.object({name:z.string(),played:z.number().int().min(0),wins:z.number().int().min(0),draws:z.number().int().min(0),losses:z.number().int().min(0),goalsFor:z.number().int().min(0),goalsAgainst:z.number().int().min(0),points:z.number(),fantasyTotal:z.number()}).strict();
-export const competitionSchema=z.object({source:z.string().url(),fetchedAt:z.string().datetime({offset:true}),calendar:z.array(competitionRoundSchema).length(35),matches:z.array(resultMatchSchema),standings:z.array(standingSchema).length(10),warnings:z.array(z.string())}).strict();
-
-export const snapshotSchema = z.object({
-  schema_version: z.literal(1), league:z.literal('chefantavitae10'),
-  season:z.literal('2026-2027'), competition_id:z.literal('337500'),
-  round:z.number().int().min(1).max(35), observed_at:z.string().datetime({offset:true}),
-  source:z.literal('authenticated_ui'),source_url:z.string().url(),
-  expected_total:z.literal(10),inserted:z.number().int().min(0).max(10),
-  teams:z.array(teamSchema).length(10),competition:competitionSchema.optional(),
-}).strict().superRefine((s,ctx)=>{
-  const bad=(message:string)=>ctx.addIssue({code:z.ZodIssueCode.custom,message});
-  const url=new URL(s.source_url);
-  if(url.origin!=='https://leghe.fantacalcio.it'||url.pathname!==`/${s.league}/view/competition/${s.competition_id}/manage-lineups/${s.round}`)bad('La pagina sorgente non corrisponde alla giornata.');
-  if(new Set(s.teams.map(t=>t.team_key)).size!==10)bad('Sono presenti squadre duplicate.');
-  for(const t of s.teams){
-    if(!TEAM_NAMES.includes(t.name)||t.team_key!==t.name)bad('Elenco squadre diverso da quello della lega.');
-    if(t.source_status!==(t.present?'check-circle':'Non inserita'))bad('Indicatore di formazione incoerente.');
-  }
-  if(s.competition){
-    for(const r of s.competition.calendar)for(const m of r.matches)if(!TEAM_NAMES.includes(m.home)||!TEAM_NAMES.includes(m.away))bad('Calendario con squadre non appartenenti alla lega.');
-  }
-  if(s.teams.filter(t=>t.present).length!==s.inserted)bad('Il conteggio non coincide con le squadre.');
-  if(Date.parse(s.observed_at)>Date.now()+60000)bad('La lettura ha una data futura.');
-});
-export type Competition=z.infer<typeof competitionSchema>;
-export type Snapshot=z.infer<typeof snapshotSchema>;
+export function makeCompetitionSchema(cfg:LeagueConfig){
+  const competitionRoundSchema=z.object({round:z.number().int().min(1).max(cfg.roundCount),championshipRound:z.number().int().min(1).max(cfg.roundCount+cfg.serieAOffset),calculated:z.boolean(),matches:z.array(competitionMatchSchema).length(Math.floor(cfg.teamCount/2))}).strict();
+  const resultMatchSchema=z.object({round:z.number().int().min(1).max(cfg.roundCount),home:z.string(),away:z.string(),homeGoals:z.number().int(),awayGoals:z.number().int(),homeFantasy:z.number().nullable(),awayFantasy:z.number().nullable()}).strict();
+  return z.object({source:z.string().url(),fetchedAt:z.string().datetime({offset:true}),calendar:z.array(competitionRoundSchema).length(cfg.roundCount),matches:z.array(resultMatchSchema),standings:z.array(standingSchema).length(cfg.teamCount),warnings:z.array(z.string())}).strict();
+}
+export function makeSnapshotSchema(cfg:LeagueConfig){
+  const names=new Set(teamNames(cfg));
+  return z.object({
+    schema_version: z.literal(1), league:z.literal(cfg.slug),
+    season:z.literal(cfg.season), competition_id:z.literal(cfg.competitionId),
+    round:z.number().int().min(1).max(cfg.roundCount), observed_at:z.string().datetime({offset:true}),
+    source:z.literal('authenticated_ui'),source_url:z.string().url(),
+    expected_total:z.literal(cfg.teamCount),inserted:z.number().int().min(0).max(cfg.teamCount),
+    teams:z.array(teamSchema).length(cfg.teamCount),competition:makeCompetitionSchema(cfg).optional(),
+  }).strict().superRefine((s,ctx)=>{
+    const bad=(message:string)=>ctx.addIssue({code:z.ZodIssueCode.custom,message});
+    const url=new URL(s.source_url);
+    if(url.origin!=='https://leghe.fantacalcio.it'||url.pathname!==`/${s.league}/view/competition/${s.competition_id}/manage-lineups/${s.round}`)bad('La pagina sorgente non corrisponde alla giornata.');
+    if(new Set(s.teams.map(t=>t.team_key)).size!==cfg.teamCount)bad('Sono presenti squadre duplicate.');
+    for(const t of s.teams){
+      if(!names.has(t.name)||t.team_key!==t.name)bad('Elenco squadre diverso da quello della lega.');
+      if(t.source_status!==(t.present?'check-circle':'Non inserita'))bad('Indicatore di formazione incoerente.');
+    }
+    if(s.competition){
+      for(const r of s.competition.calendar)for(const m of r.matches)if(!names.has(m.home)||!names.has(m.away))bad('Calendario con squadre non appartenenti alla lega.');
+    }
+    if(s.teams.filter(t=>t.present).length!==s.inserted)bad('Il conteggio non coincide con le squadre.');
+    if(Date.parse(s.observed_at)>Date.now()+60000)bad('La lettura ha una data futura.');
+  });
+}
+// Lo schema si ricostruisce solo quando la configurazione cambia davvero: listSnapshots
+// fa il parse di ogni riga e la chiave include updatedAt per invalidare la cache.
+const schemaCache=new Map<string,ReturnType<typeof makeSnapshotSchema>>();
+export function snapshotSchemaFor(cfg:LeagueConfig){
+  const key=`${cfg.id}:${cfg.updatedAt}`;
+  const cached=schemaCache.get(key);if(cached)return cached;
+  const schema=makeSnapshotSchema(cfg);schemaCache.set(key,schema);return schema;
+}
+export const competitionSchema=makeCompetitionSchema(CHEFANTAVITAE10);
+export const snapshotSchema=snapshotSchemaFor(CHEFANTAVITAE10);
+export type Competition=z.infer<ReturnType<typeof makeCompetitionSchema>>;
+export type Snapshot=z.infer<ReturnType<typeof makeSnapshotSchema>>;
 export type TeamSnapshot=Snapshot['teams'][number];
 export type Archive={canManage?:boolean;reviews:Review[];snapshots:Snapshot[]; events:{team_key:string;round:number;source_label:string;source_time_text:string;source_url:string}[]};
 export function normalize(s:Snapshot):Snapshot{return {...s,observed_at:new Date(s.observed_at).toISOString(),teams:[...s.teams].sort((a,b)=>a.team_key.localeCompare(b.team_key))};}
@@ -68,7 +82,6 @@ export function canonical(value:unknown):string {
   if(value!==null&&typeof value==='object')return '{'+Object.keys(value).sort().map(k=>JSON.stringify(k)+':'+canonical((value as Record<string,unknown>)[k])).join(',')+'}';
   return JSON.stringify(value);
 }
-export const identityKey=(s:Snapshot)=>`${s.round}:${s.observed_at}`;
 export function latestByRound(snapshots:Snapshot[]):Map<number,Snapshot>{const m=new Map<number,Snapshot>();for(const s of [...snapshots].sort((a,b)=>a.observed_at.localeCompare(b.observed_at)))m.set(s.round,s);return m;}
-export function initials(name:string){return name.split(' ').filter(x=>!['FC','AC','I'].includes(x)).slice(0,2).map(x=>x[0]).join('');}
+export function initials(name:string){const tokens=name.split(' ').filter(x=>x.length>2);const source=tokens.length?tokens:[name];return source.slice(0,2).map(x=>x[0]).join('')||name.slice(0,2);}
 export function displayDate(date:string){return new Intl.DateTimeFormat('it-IT',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'Europe/Rome'}).format(new Date(date));}
