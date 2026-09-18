@@ -70,38 +70,82 @@ non è più la fonte della sincronizzazione: resta nel repo come riferimento.
 ### Servizio connettore
 
 Immagine `connector/Dockerfile`, basata su quella ufficiale Playwright. L'avvio è
-`npm start`, che carica due patch prima del server:
-`node --import ./phase1-patch.mjs --import ./phase2-patch.mjs server.mjs`.
-`phase1-patch.mjs` arricchisce le risposte di `apileague.fantacalcio.it` (manager,
-budget, stemma, maglia, giocatori); `phase2-patch.mjs` aggiunge la rotta `/competition`.
-Leggerle entrambe prima di modificare il connettore: senza, metà delle rotte non esiste.
+`npm start`, cioè `node server.mjs`: **un solo deployment**. I due monkey-patch caricati con
+`--import` sono stati rimossi — non potevano funzionare con più leghe, perché il loro unico
+contesto era la stringa dell'URL della richiesta. Le stesse trasformazioni ora sono funzioni
+esplicite in `connector/lib/fantacalcio.mjs`, applicate dal chiamante che sa di quale lega
+si tratta.
+
+Il connettore **non contiene più costanti di lega**: all'avvio legge `fm_leagues_for_bot` e
+tiene in cache le leghe attive per 60 s. Slug, competizione, stagione, squadre, numero di
+giornate e canali Telegram vengono da lì.
+
+| File | Ruolo |
+|---|---|
+| `lib/config.mjs` | soli segreti di infrastruttura, nessuna lega |
+| `lib/leagues.mjs` | directory delle leghe, `chat_id → lega`, credenziali, TTL sessione |
+| `lib/credentials.mjs` | apre le buste sigillate dalla web app; qui vive la chiave privata |
+| `lib/browser.mjs` | un solo Chromium riusato, mutex per lega e tetto globale di contesti |
+| `lib/capture.mjs` | sessione, login di fallback, cattura formazioni e competizione |
+| `lib/snapshot.mjs` | forma dello snapshot e classifica — senza Playwright, quindi testabili |
+| `lib/telegram.mjs` | testi, tastiera e pubblicazione per lega |
+| `lib/concurrency.mjs` | limitatore e mutex per chiave |
 
 Rotte esposte:
 
 | Rotta | Autenticazione | Uso |
 |---|---|---|
-| `POST /sync` | HMAC-SHA256 su `${timestamp}.${body}`, finestra 120 s | lettura di una giornata, chiamata da `lib/sync.ts` e da `cron.mjs` |
-| `POST /competition` | come sopra (aggiunta da `phase2-patch.mjs`) | calendario, risultati e classifica per `/api/performance` |
+| `POST /sync` | HMAC-SHA256 su `${timestamp}.${body}`, finestra 120 s | body `{league, round}`, lettura di una giornata |
+| `POST /competition` | come sopra | body `{league}`, calendario e classifica per `/api/performance` |
+| `POST /credential-check` | come sopra | body `{league}`, solo login: nessuna cattura |
 | `POST /auto-sync` | token OIDC GitHub Actions, pinnato su repository, `refs/heads/main` e workflow | esegue il checkpoint dovuto |
 | `POST /telegram/webhook` | `x-telegram-bot-api-secret-token` | comandi `/status`, `/missing`, `/next`, `/sync`, `/stats`, `/help` |
+| `GET /health` | nessuna | stato della coda dei contesti |
 
-Variabili d'ambiente del servizio: `FANTAMONITOR_CONNECTOR_SECRET`,
-`FANTACALCIO_USERNAME`, `FANTACALCIO_PASSWORD`, `SUPABASE_URL`,
-`SUPABASE_PUBLISHABLE_KEY`, `AUTO_SYNC_DB_SECRET`, `TELEGRAM_BOT_TOKEN`,
-`TELEGRAM_CHAT_ID`, più le opzionali `TELEGRAM_THREAD_ID`, `TELEGRAM_ADMIN_CHAT_ID`,
-`CONNECTOR_PUBLIC_URL` e `FANTAMONITOR_PUBLIC_URL`. Il segreto HMAC deve coincidere con
-`FANTAMONITOR_CONNECTOR_SECRET` impostato sulla web app; `AUTO_SYNC_DB_SECRET` è la
-chiave in chiaro di cui la migrazione conserva solo il digest SHA-256.
+Variabili d'ambiente: `FANTAMONITOR_CONNECTOR_SECRET`, `SUPABASE_URL`,
+`SUPABASE_PUBLISHABLE_KEY`, `AUTO_SYNC_DB_SECRET`, `FM_CREDENTIAL_PRIVATE_KEY`,
+`TELEGRAM_BOT_TOKEN`, più le opzionali `CONNECTOR_PUBLIC_URL`, `FANTAMONITOR_PUBLIC_URL`,
+`CONNECTOR_MAX_CONTEXTS` (default 2) e `CONNECTOR_SESSION_TTL_MS` (default 12 h).
+**`FANTACALCIO_USERNAME`, `FANTACALCIO_PASSWORD`, `TELEGRAM_CHAT_ID`, `TELEGRAM_THREAD_ID` e
+`TELEGRAM_ADMIN_CHAT_ID` non servono più**: le credenziali stanno cifrate per lega in
+`fm_league_credentials` e i canali Telegram nelle colonne di `fm_leagues`. Vanno rimosse da
+Railway dopo il deploy.
+
+Il segreto HMAC deve coincidere con `FANTAMONITOR_CONNECTOR_SECRET` sulla web app;
+`AUTO_SYNC_DB_SECRET` è la chiave in chiaro di cui la migrazione conserva solo il digest.
+
+### Un bot Telegram per tutte le leghe
+
+Un bot ha un solo webhook, ma quel webhook riceve gli update di **tutte** le chat in cui il
+bot si trova: basta mappare `chat_id → lega`, ed è quello che fa `leagueForChat`. Una chat
+sconosciuta viene ignorata invece che indovinata — è il punto in cui un messaggio potrebbe
+finire nel canale della lega sbagliata. Limiti accettati: un nome, un `setMyCommands`,
+nessun branding per lega e un rate limit condiviso.
+
+### Sessione Playwright
+
+Prima si lanciava un browser nuovo e si rifaceva il login a ogni operazione, e un auto-sync
+ne faceva due. Ora il browser è uno solo e riusato, e ogni lega ha un `storageState` cifrato
+in `fm_league_credentials.session_state`, non su disco: i container Railway sono effimeri.
+
+La sessione salvata è una scorciatoia, non una garanzia: si prova a navigare direttamente
+sulla pagina, e se compare il muro di login si rifà l'accesso completo e si salva lo stato
+nuovo. Il TTL di 12 h serve solo a rinfrescare in anticipo — Fantacalcio può invalidare la
+sessione in qualsiasi momento.
+
+Con 2–3 leghe bastano un mutex per lega (due richieste sulla stessa lega non devono fare due
+login) e un tetto di 2 contesti simultanei. Un contesto Chromium costa 50–80 MB: **la memoria
+del container è il limite di scala reale, non la CPU.**
 
 ### Pianificazione dei checkpoint
 
-`connector/cron.mjs` reclama il checkpoint dovuto con `fm_claim_due_auto_sync`, chiama
-`POST /sync`, registra l'esito con `fm_complete_auto_sync` o `fm_fail_auto_sync` e
-pubblica su Telegram. Non contiene uno scheduler: va invocato dall'esterno, tramite
-l'immagine `connector/Dockerfile.cron` o tramite `connector/Dockerfile.scheduler`, che
-espone `POST /run` protetto da `EVENT_SCHEDULER_SECRET` ed esegue `cron.mjs` come
-processo figlio, uno alla volta. Esiste anche il workflow `auto-sync.yml`, manuale
-(`workflow_dispatch`), che chiama `POST /auto-sync` con un token OIDC.
+`fm_claim_due_auto_sync` restituisce ora anche la lega, e scandisce tutte quelle con
+`auto_sync_enabled`: due leghe possono avere checkpoint simultanei senza bloccarsi, perché i
+vincoli di unicità includono `league_id`. Il claim va invocato dall'esterno con
+`POST /auto-sync` — le immagini `Dockerfile.cron` e `Dockerfile.scheduler` sono state
+eliminate insieme a `cron.mjs` e `scheduler-server.mjs`, che erano in gran parte copie di
+`server.mjs` e producevano per giunta snapshot senza il blocco `competition`. Esiste il
+workflow `auto-sync.yml`, manuale (`workflow_dispatch`).
 
 Gli orari di inizio giornata vivono in `fm_round_schedule`: le righe future restano a
 `NULL` finché la Lega non pubblica gli orari ufficiali, e un checkpoint senza orario non

@@ -22,12 +22,17 @@ in autonomia.
 
 **Costanti duplicate da tenere allineate**
 
-| Costante | Punti |
+Le costanti di lega **non esistono più**: elenco squadre, numero di giornate, scope e
+pattern `source_url` vivono nelle righe di `fm_leagues` / `fm_league_teams`, e TypeScript,
+SQL e connettore leggono la stessa riga. La preset `CHEFANTAVITAE10` in `lib/league.ts` è
+una fixture di test, e `tests/postgres.test.mjs` asserisce che coincida con la riga seedata.
+
+| Punto | Cosa controllare |
 |---|---|
-| 10 squadre | `lib/model.ts`, `connector/server.mjs`, `connector/phase2-patch.mjs`, `prototype/collector.mjs`, SQL `fm_valid_team()` |
-| Giornate 1–35 | `lib/model.ts`, `lib/penalties.ts`, entrambe le migrazioni, `connector/server.mjs` |
-| Pattern `source_url` | `lib/model.ts`, `lib/penalties.ts`, `fm_import_observations` |
-| Scope lega/stagione/competizione | `lib/model.ts`, `fm_import_observations`, `connector/*` |
+| `lib/league.ts` | la preset deve restare fedele alla lega reale |
+| `lib/penalties.ts` | la regola è parametrica: con `freeTokens=1, penaltyAmount=5` deve ridursi al comportamento attuale |
+| migrazioni | un cambio di `round_count` / `free_tokens` / `penalty_amount` è un cambio di regola |
+| `prototype/collector.mjs` | unica copia residua delle costanti, codice storico, non gira in produzione |
 
 **Procedura**
 

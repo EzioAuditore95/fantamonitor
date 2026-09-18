@@ -2,8 +2,13 @@
   "name": "fantamonitor-connector",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22" },
-  "scripts": { "start": "node --import ./phase1-patch.mjs --import ./phase2-patch.mjs server.mjs" },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
   "dependencies": {
     "jose": "^6.1.0",
     "playwright": "1.55.0"

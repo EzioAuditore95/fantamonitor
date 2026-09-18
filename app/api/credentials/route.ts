@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { requireLeagueMember } from '@/app/auth';
 import { createClient } from '@/lib/supabase/server';
 import { credentialsConfigured,fingerprint,seal } from '@/lib/credentials';
+import { checkConnectorCredentials } from '@/lib/sync';
 const headers={'Cache-Control':'private, no-store'};
 const MAX_BODY=131_072;
 const inputSchema=z.discriminatedUnion('mode',[
@@ -20,6 +21,23 @@ export async function GET(request:Request){
     return Response.json({...(data as object),encryptionReady:credentialsConfigured()},{headers});
   }catch(e){console.error('credential_status_failed',e instanceof Error?e.message:'unknown');
     return Response.json({error:'Stato delle credenziali non disponibile.'},{status:503,headers});}
+}
+
+export async function PUT(request:Request){
+  // Verifica della connessione: il connettore fa solo il login, nessuna cattura.
+  const ctx=await requireLeagueMember(new URL(request.url).searchParams.get('league'));
+  if(ctx instanceof Response)return ctx;
+  const {user,cfg}=ctx;
+  if(user.role!=='admin')return Response.json({error:'Operazione riservata all’amministratore.'},{status:403,headers});
+  if(request.headers.get('origin')!==new URL(request.url).origin)return Response.json({error:'Origine non autorizzata.'},{status:403,headers});
+  try{return Response.json(await checkConnectorCredentials(cfg),{headers});}
+  catch(e){
+    const message=e instanceof Error?e.message:'';
+    console.error('credential_check_failed',message);
+    if(message.includes('connector_auth_failed'))return Response.json({error:'Fantacalcio ha rifiutato le credenziali.'},{status:502,headers});
+    if(message.includes('connector_credentials_missing'))return Response.json({error:'Nessuna credenziale collegata.'},{status:409,headers});
+    return Response.json({error:'Verifica non riuscita: il connettore non ha risposto.'},{status:502,headers});
+  }
 }
 
 export async function POST(request:Request){

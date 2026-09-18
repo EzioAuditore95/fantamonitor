@@ -104,6 +104,8 @@ button:focus-visible,a:focus-visible { outline:3px solid var(--brand-orange); ou
 .credential-chip svg { width:15px; height:15px }
 .credential-state { border:1px solid #e2e9f2; border-radius:6px; padding:12px 14px; margin:4px 0 12px; display:grid; gap:4px }
 .credential-state p { margin:0; font-size:.875rem }
+.credential-actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:4px }
+.credential-actions .btn { flex:1 1 auto; justify-content:center }
 .muted { color:var(--muted-foreground) } .micro { font-size:.8125rem }
 .eyebrow { font-size:.8125rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted-foreground) }
 .navigation { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:0 18px; background:#fff; border:1px solid var(--border); border-radius:6px; margin-bottom:28px; box-shadow:0 2px 4px #16355a05 }

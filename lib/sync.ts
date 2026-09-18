@@ -29,3 +29,8 @@ export async function syncFromConnector(cfg:LeagueConfig,round:number){
   const snapshot=normalize(schema.parse(competition?{...base,competition}:base));
   return {...(await importSnapshots(snapshot,cfg)),round:snapshot.round,observedAt:snapshot.observed_at,competitionCaptured:Boolean(competition)};
 }
+
+export async function checkConnectorCredentials(cfg:LeagueConfig){
+  const payload=await connectorRequest('/credential-check',{league:cfg.slug},60_000);
+  return {status:String(payload.status??'unknown'),detail:payload.detail?String(payload.detail):null};
+}

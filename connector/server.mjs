@@ -1,134 +1,155 @@
 import http from 'node:http';
 import crypto from 'node:crypto';
-import { chromium } from 'playwright';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { appUrl,autoSyncSecret,port,publicUrl,secret,secretFingerprint,sign,supabaseKey,supabaseUrl,telegramBotToken,telegramWebhookSecret } from './lib/config.mjs';
+import { rpc,withKey } from './lib/rpc.mjs';
+import { credentialsConfigured } from './lib/credentials.mjs';
+import { leagueBySlug,leagueForChat,loadLeagues } from './lib/leagues.mjs';
+import { capture,captureCompetition,checkCredentials } from './lib/capture.mjs';
+import { browserStats } from './lib/browser.mjs';
+import { buildMissingMessage,buildNextMessage,buildTelegramMessage,notifyAdmin,publishTelegramStatus,telegramApi } from './lib/telegram.mjs';
 
-const port=Number(process.env.PORT||8080);
-const secret=process.env.FANTAMONITOR_CONNECTOR_SECRET||'';
-const username=process.env.FANTACALCIO_USERNAME||'';
-const password=process.env.FANTACALCIO_PASSWORD||'';
-const supabaseUrl=process.env.SUPABASE_URL||'';
-const supabaseKey=process.env.SUPABASE_PUBLISHABLE_KEY||'';
-const autoSyncSecret=process.env.AUTO_SYNC_DB_SECRET||'';
-const telegramBotToken=process.env.TELEGRAM_BOT_TOKEN||'';
-const telegramChatId=process.env.TELEGRAM_CHAT_ID||'';
-const telegramThreadId=process.env.TELEGRAM_THREAD_ID||'';
-const telegramAdminChatId=process.env.TELEGRAM_ADMIN_CHAT_ID||'';
-const publicUrl=(process.env.CONNECTOR_PUBLIC_URL||'https://fantamonitor-connector-production.up.railway.app').replace(/\/$/,'');
-const appUrl=(process.env.FANTAMONITOR_PUBLIC_URL||'https://fantamonitor-production.up.railway.app').replace(/\/$/,'');
-const telegramWebhookSecret=telegramBotToken?crypto.createHash('sha256').update(telegramBotToken).digest('hex').slice(0,48):'';
-const league='chefantavitae10',competition='337500';
-const teams=['AC Idovalproico','Atletico Fontanelle','FC LBVLA','FC SEMINI','FC Villaggio Mau Mau','FDS Sballo','I PIPPISTRELLI','Pro Spritz','Real Hasbulla','Salamandre'];
-const secretFingerprint=crypto.createHash('sha256').update(secret).digest('hex').slice(0,12);
 const githubJwks=createRemoteJWKSet(new URL('https://token.actions.githubusercontent.com/.well-known/jwks'));
-const sign=(timestamp,body)=>crypto.createHmac('sha256',secret).update(`${timestamp}.${body}`).digest('hex');
-
-function auth(req,raw){const ts=req.headers['x-fm-timestamp']||'',sig=req.headers['x-fm-signature']||'';const age=Math.abs(Date.now()-Number(ts));return secret&&/^\d+$/.test(ts)&&age<120000&&sig.length===64&&crypto.timingSafeEqual(Buffer.from(sig),Buffer.from(sign(ts,raw)));}
+function auth(req,raw){
+  const ts=req.headers['x-fm-timestamp']||'',sig=req.headers['x-fm-signature']||'';
+  const age=Math.abs(Date.now()-Number(ts));
+  return secret&&/^\d+$/.test(ts)&&age<120000&&sig.length===64&&crypto.timingSafeEqual(Buffer.from(sig),Buffer.from(sign(ts,raw)));
+}
 function signedJson(res,status,body,ts){const raw=JSON.stringify(body);res.writeHead(status,{'content-type':'application/json','cache-control':'no-store','x-fm-signature':sign(ts,raw)});res.end(raw);}
 function plainJson(res,status,body){res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(body));}
-function findTeamObjects(value,out=[]){if(Array.isArray(value)){for(const item of value)findTeamObjects(item,out);return out;}if(!value||typeof value!=='object')return out;const name=typeof value.n==='string'?value.n:typeof value.name==='string'?value.name:typeof value.nome==='string'?value.nome:'';const id=Number(value.id??value.teamId??value.tid);if(name&&Number.isInteger(id)&&id>0)out.push({name:name.trim(),id,raw:value});for(const child of Object.values(value))findTeamObjects(child,out);return out;}
-function normalizeAssetUrl(value){if(typeof value!=='string'||!value.trim())return undefined;const x=value.trim();if(/^https?:\/\//i.test(x))return x;if(x.startsWith('//'))return `https:${x}`;if(x.startsWith('/'))return `https://leghe.fantacalcio.it${x}`;return undefined;}
-function findByKey(value,keyPattern,accept,depth=0,seen=new Set()){if(depth>8||!value||typeof value!=='object'||seen.has(value))return undefined;seen.add(value);if(Array.isArray(value)){for(const item of value){const hit=findByKey(item,keyPattern,accept,depth+1,seen);if(hit!==undefined)return hit;}return undefined;}for(const [key,child] of Object.entries(value)){if(keyPattern.test(key)){const accepted=accept(child);if(accepted!==undefined)return accepted;if(child&&typeof child==='object'){const nested=findByKey(child,/^(name|nome|label|value|url|src)$/i,accept,depth+1,seen);if(nested!==undefined)return nested;}}}for(const child of Object.values(value)){const hit=findByKey(child,keyPattern,accept,depth+1,seen);if(hit!==undefined)return hit;}return undefined;}
-function metaString(value,pattern){return findByKey(value,pattern,v=>typeof v==='string'&&v.trim()?v.trim():undefined);}
-function metaNumber(value,pattern){return findByKey(value,pattern,v=>{const n=Number(v);return Number.isFinite(n)?n:undefined;});}
-function metaUrl(value,pattern){return findByKey(value,pattern,v=>normalizeAssetUrl(v));}
-function directString(value,keys){if(!value||typeof value!=='object')return undefined;for(const key of keys){const v=value[key];if(typeof v==='string'&&v.trim())return v.trim();}return undefined;}
-function directNumber(value,keys){if(!value||typeof value!=='object')return undefined;for(const key of keys){const n=Number(value[key]);if(Number.isFinite(n))return n;}return undefined;}
-function playerFromObject(value,path){if(!value||typeof value!=='object'||Array.isArray(value))return null;const first=directString(value,['firstName','firstname','nome','fn']);const last=directString(value,['lastName','lastname','cognome','ln']);const name=directString(value,['playerName','displayName','fullName','name','n'])||[first,last].filter(Boolean).join(' ').trim();const role=directString(value,['role','ruolo','position','r']);const id=directNumber(value,['playerId','idPlayer','pid','idCalciatore','id']);const playerish=/player|calciator|giocator|rosa|roster|lineup|titol|bench|panch/i.test(path);if(!name||(!role&&!playerish))return null;const shirt=directNumber(value,['shirtNumber','numeroMaglia','number']);const image=metaUrl(value,/^(image|imageUrl|photo|photoUrl|picture|avatar|src)$/i);return {id:id??undefined,name,role:role||undefined,shirt_number:Number.isInteger(shirt)?shirt:undefined,image_url:image};}
-function extractPlayers(value,path='',out=[] ,seen=new Set(),depth=0){if(depth>9||value==null)return out;if(Array.isArray(value)){for(const item of value)extractPlayers(item,path,out,seen,depth+1);return out;}if(typeof value!=='object'||seen.has(value))return out;seen.add(value);const player=playerFromObject(value,path);if(player){const section=/bench|panch/i.test(path)?'bench':/start|titol|lineup|formation|schier/i.test(path)?'starters':'roster';out.push({...player,section});}for(const [key,child] of Object.entries(value))extractPlayers(child,`${path}/${key}`,out,seen,depth+1);return out;}
-function uniquePlayers(players){const seen=new Set();const out=[];for(const p of players){const key=String(p.id??'')+'|'+p.name.toLowerCase();if(seen.has(key))continue;seen.add(key);const {section,...clean}=p;out.push({...clean,section});}return out;}
-function extractFormation(dto){if(!dto||typeof dto!=='object')return undefined;const players=uniquePlayers(extractPlayers(dto));const starters=players.filter(p=>p.section==='starters').map(({section,...p})=>p);const bench=players.filter(p=>p.section==='bench').map(({section,...p})=>p);const roster=players.map(({section,...p})=>p);const module=metaString(dto,/^(module|modulo|formation|schema|system)$/i);if(!module&&!roster.length)return undefined;return {module:module||undefined,starters:starters.length?starters:undefined,bench:bench.length?bench:undefined,roster:roster.length?roster:undefined};}
 
-async function loginAndOpen(page,round){
-  await page.goto('https://leghe.fantacalcio.it/login',{waitUntil:'domcontentloaded',timeout:20000});
-  await page.locator('input[placeholder="Username"],input[autocomplete="username"]').first().fill(username);
-  await page.locator('input[placeholder="Password"],input[autocomplete="current-password"]').first().fill(password);
-  await page.getByRole('button',{name:'LOGIN'}).click();
-  await Promise.race([page.waitForURL(u=>!/\/login(?:\/|$)/i.test(new URL(u).pathname),{timeout:15000}),page.waitForTimeout(3000)]);
-  await page.waitForLoadState('networkidle',{timeout:10000}).catch(()=>{});
-  const baseUrl=`https://leghe.fantacalcio.it/${league}/view/competition/${competition}/manage-lineups/${round}`;
-  await page.goto(baseUrl,{waitUntil:'networkidle',timeout:30000});
-  const currentUrl=page.url();const loginForm=await page.locator('input[autocomplete="username"]:visible,input[placeholder="Username"]:visible').count()>0;
-  console.info('fantacalcio_login_state',{round,currentUrl,loginForm,title:await page.title()});
-  if(/\/login(?:\/|$)/i.test(currentUrl)||loginForm)throw new Error('connector_auth_failed');
-  const match=currentUrl.match(/\/manage-lineups\/(\d+)/i);if((match?Number(match[1]):null)!==round)throw new Error('connector_round_unavailable');return {baseUrl,currentUrl};
+async function requireLeague(slug){
+  const league=leagueBySlug(String(slug||''),await loadLeagues());
+  if(!league)throw new Error('unknown_league');
+  return league;
 }
-async function getContext(round){
-  const browser=await chromium.launch({headless:true});const page=await browser.newPage();let competitionTeamsPayload=null;
-  const listener=async response=>{if(/\/onboarding\/v1\/league\/competition\/teams/.test(response.url())&&response.status()===200){try{competitionTeamsPayload=await response.json();}catch{}}};page.on('response',listener);
-  try{const cdp=await page.context().newCDPSession(page);await cdp.send('Network.setCacheDisabled',{cacheDisabled:true});const reqPromise=page.waitForRequest(r=>/\/gaming\/v1\/teamLineup\/visualizza\//.test(r.url()),{timeout:20000});const {baseUrl}=await loginAndOpen(page,round);const firstReq=await reqPromise;if(!competitionTeamsPayload)throw new Error('connector_team_list_missing');const map=new Map();for(const x of findTeamObjects(competitionTeamsPayload))if(!map.has(x.name))map.set(x.name,x);const teamIds=teams.map(name=>{const item=map.get(name);return {name,id:item?.id,meta:item?.raw};});if(teamIds.some(t=>!Number.isInteger(t.id)))throw new Error('connector_team_mapping_failed');const captured=await firstReq.allHeaders();const headers={};for(const [k,v] of Object.entries(captured)){const l=k.toLowerCase();if(!k.startsWith(':')&&!['host','content-length','connection','accept-encoding'].includes(l)&&!l.startsWith('sec-fetch-'))headers[k]=v;}return {browser,page,listener,baseUrl,teamIds,headers};}catch(e){page.off('response',listener);await browser.close();throw e;}
+async function verifyGithubAction(req){
+  const header=String(req.headers.authorization||'');
+  if(!header.startsWith('Bearer '))throw new Error('oidc_missing');
+  const {payload}=await jwtVerify(header.slice(7),githubJwks,{issuer:'https://token.actions.githubusercontent.com',audience:'fantamonitor-auto-sync'});
+  if(payload.repository!=='EzioAuditore95/fantamonitor'||payload.ref!=='refs/heads/main')throw new Error('oidc_scope');
+  if(!String(payload.workflow_ref||'').includes('/.github/workflows/auto-sync.yml@refs/heads/main'))throw new Error('oidc_workflow');
 }
-async function fetchLineups(round){const ctx=await getContext(round);try{return await Promise.all(ctx.teamIds.map(async team=>{const url=`https://apileague.fantacalcio.it/gaming/v1/teamLineup/visualizza/A/${competition}/${team.id}/${round}`;const r=await fetch(url,{headers:ctx.headers,signal:AbortSignal.timeout(10000)});if(!r.ok)throw new Error(`connector_lineup_http_${r.status}`);let payload;try{payload=await r.json();}catch{throw new Error('connector_lineup_invalid_json');}return {team,dto:payload?.teamLineupDto??null};}));}finally{ctx.page.off('response',ctx.listener);await ctx.browser.close();}}
-function toTeamStatus(item,round){const dto=item.dto;if(dto!=null&&typeof dto!=='object')throw new Error('connector_lineup_invalid_payload');if(dto&&Number(dto.tid)!==item.team.id)throw new Error('connector_lineup_team_mismatch');if(dto&&Number(dto.mday)!==round)throw new Error('connector_lineup_round_mismatch');const present=Boolean(dto&&Number(dto.mday)===round&&typeof dto.ldate==='string'&&dto.ldate.length>0);const meta=item.team.meta;const manager=metaString(meta,/(manager|owner|president|presidente|username|userName|coach)/i);const budget=metaNumber(meta,/(budget|credit|crediti|remainingCredits|fcredit)/i);const crest=metaUrl(meta,/(crest|logo|stemma|badge)/i);const kit=metaUrl(meta,/(kit|shirt|maglia|jersey)/i);const formation=extractFormation(dto);const result={team_key:item.team.name,name:item.team.name,present,source_status:present?'check-circle':'Non inserita',team_id:item.team.id};if(manager)result.manager=manager;if(budget!==undefined)result.budget=budget;if(crest)result.crest_url=crest;if(kit)result.kit_url=kit;if(formation)result.formation=formation;return result;}
-async function capture(round){if(!username||!password)throw new Error('connector_credentials_missing');const started=Date.now();const items=await fetchLineups(round);const teamsData=items.map(x=>toTeamStatus(x,round));if(teamsData.length!==teams.length)throw new Error('connector_incomplete_teams');const snapshot={schema_version:1,league,season:'2026-2027',competition_id:competition,round,observed_at:new Date().toISOString(),source:'authenticated_ui',source_url:`https://leghe.fantacalcio.it/${league}/view/competition/${competition}/manage-lineups/${round}`,expected_total:teams.length,inserted:teamsData.filter(t=>t.present).length,teams:teamsData};console.info('fantacalcio_capture_complete',{round,inserted:snapshot.inserted,enriched:teamsData.filter(t=>t.manager||t.crest_url||t.budget!==undefined||t.formation).length,durationMs:Date.now()-started});return snapshot;}
 
-async function verifyGithubAction(req){const header=String(req.headers.authorization||'');if(!header.startsWith('Bearer '))throw new Error('oidc_missing');const token=header.slice(7);const {payload}=await jwtVerify(token,githubJwks,{issuer:'https://token.actions.githubusercontent.com',audience:'fantamonitor-auto-sync'});if(payload.repository!=='EzioAuditore95/fantamonitor'||payload.ref!=='refs/heads/main')throw new Error('oidc_scope');if(typeof payload.workflow_ref!=='string'||!payload.workflow_ref.includes('/.github/workflows/auto-sync.yml@refs/heads/main'))throw new Error('oidc_workflow');return payload;}
-async function rpc(name,args){if(!supabaseUrl||!supabaseKey||!autoSyncSecret)throw new Error('auto_sync_not_configured');const response=await fetch(`${supabaseUrl.replace(/\/$/,'')}/rest/v1/rpc/${name}`,{method:'POST',headers:{apikey:supabaseKey,'content-type':'application/json'},body:JSON.stringify(args),signal:AbortSignal.timeout(10000)});const text=await response.text();if(!response.ok)throw new Error(`supabase_${name}_${response.status}:${text.slice(0,180)}`);if(!text)return null;try{return JSON.parse(text);}catch{return text;}}
-
-function checkpointCopy(checkpoint){return ({'T-24h':'Promemoria iniziale: manca ancora tempo, ma queste squadre non risultano aver inserito la formazione.','T-12h':'Promemoria: queste squadre risultano ancora senza formazione.','T-1h':'Manca 1 ora: controllare le squadre ancora senza formazione.','T-15m':'Ultimo avviso: mancano 15 minuti alla scadenza.','T+5m':'Scadenza superata: situazione finale rilevata.'})[checkpoint]||'Stato aggiornato.';}
-function buildTelegramMessage(snapshot,checkpoint='LIVE'){
-  const missing=snapshot.teams.filter(t=>!t.present).map(t=>t.name);const summary=`Formazioni inserite: ${snapshot.inserted}/${snapshot.expected_total}`;const lines=[`FANTAMONITOR — Giornata ${snapshot.round}`,checkpoint==='LIVE'?'Aggiornamento manuale':checkpointCopy(checkpoint),summary,''];
-  if(!missing.length)lines.push(checkpoint==='T+5m'?'Situazione finale: tutte le squadre hanno inserito la formazione.':'Tutte le squadre hanno inserito la formazione.');else lines.push(`Squadre senza formazione (${missing.length}):`,...missing.map(n=>`• ${n}`));
-  lines.push('',`Aggiornato: ${new Intl.DateTimeFormat('it-IT',{timeZone:'Europe/Rome',hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'}).format(new Date(snapshot.observed_at))}`);return lines.join('\n');
+async function currentRound(league){
+  const day=Number(await rpc('fm_current_round_for_bot',withKey({league:league.id})));
+  if(!Number.isInteger(day)||day<1||day>league.roundCount)throw new Error('current_round_unavailable');
+  return day;
 }
-function buildMissingMessage(snapshot){const missing=snapshot.teams.filter(t=>!t.present).map(t=>t.name);return missing.length?`Giornata ${snapshot.round} — senza formazione (${missing.length})\n${missing.map(n=>`• ${n}`).join('\n')}`:`Giornata ${snapshot.round} — nessuna squadra mancante.`;}
-function buildNextMessage(info){if(!info?.start_at)return 'Nessuna prossima giornata disponibile nel calendario.';const when=new Intl.DateTimeFormat('it-IT',{timeZone:'Europe/Rome',weekday:'short',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).format(new Date(info.start_at));return `Prossima giornata monitorata: ${info.round}\nInizio: ${when}`;}
-const telegramKeyboard={inline_keyboard:[[{text:'Aggiorna stato',callback_data:'status'},{text:'Sincronizza ora',callback_data:'sync'}],[{text:'Prossima giornata',callback_data:'next'},{text:'Statistiche',url:`${appUrl}/stats`}],[{text:'Apri FANTAMONITOR',url:appUrl}]]};
-async function telegramApi(method,payload){if(!telegramBotToken)throw new Error('telegram_not_configured');const r=await fetch(`https://api.telegram.org/bot${telegramBotToken}/${method}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(10000)});const text=await r.text();let data=null;try{data=JSON.parse(text);}catch{}if(!r.ok||!data?.ok)throw new Error(`telegram_${method}_${r.status}:${String(data?.description||text).slice(0,180)}`);return data.result;}
-async function notifyAdmin(text){if(!telegramAdminChatId)return;await telegramApi('sendMessage',{chat_id:telegramAdminChatId,text:`FANTAMONITOR — errore tecnico\n${text}`}).catch(()=>{});}
-async function publishTelegramStatus(snapshot,checkpoint,{force=false}={}){
-  if(!telegramBotToken||!telegramChatId)return {status:'skipped'};const missing=snapshot.expected_total-snapshot.inserted;const state=await rpc('fm_get_telegram_message',{access_key:autoSyncSecret,day:snapshot.round});
-  if(missing===0&&!force&&!state&&checkpoint!=='T+5m')return {status:'silent_complete'};
-  const payload={chat_id:telegramChatId,text:buildTelegramMessage(snapshot,checkpoint),reply_markup:telegramKeyboard,disable_web_page_preview:true};if(telegramThreadId){const x=Number(telegramThreadId);if(Number.isInteger(x)&&x>0)payload.message_thread_id=x;}
-  if(state?.message_id&&String(state.chat_id)===String(telegramChatId)){
-    try{await telegramApi('editMessageText',{chat_id:telegramChatId,message_id:Number(state.message_id),text:payload.text,reply_markup:telegramKeyboard,disable_web_page_preview:true});await rpc('fm_upsert_telegram_message',{access_key:autoSyncSecret,day:snapshot.round,target_chat_id:String(telegramChatId),telegram_message_id:Number(state.message_id),checkpoint_name:checkpoint});return {status:'edited',messageId:Number(state.message_id)};}catch(e){if(String(e).includes('message is not modified'))return {status:'unchanged',messageId:Number(state.message_id)};}
-  }
-  const message=await telegramApi('sendMessage',payload);await rpc('fm_upsert_telegram_message',{access_key:autoSyncSecret,day:snapshot.round,target_chat_id:String(telegramChatId),telegram_message_id:Number(message.message_id),checkpoint_name:checkpoint});return {status:'sent',messageId:Number(message.message_id)};
+async function executeTelegramAction(league,action){
+  const round=await currentRound(league);
+  const snapshot=await capture(league,round);
+  if(action==='sync')await rpc('fm_bot_import_snapshot',withKey({sample:snapshot}));
+  const published=await publishTelegramStatus(league,snapshot,'LIVE',{force:true});
+  return {round,snapshot,published};
 }
-async function currentRound(){const day=Number(await rpc('fm_current_round_for_bot',{access_key:autoSyncSecret}));if(!Number.isInteger(day)||day<1||day>35)throw new Error('current_round_unavailable');return day;}
-function telegramUpdateAuthorized(update){const ids=[];if(update.callback_query?.message?.chat?.id!=null)ids.push(String(update.callback_query.message.chat.id));for(const k of ['message','channel_post'])if(update[k]?.chat?.id!=null)ids.push(String(update[k].chat.id));return ids.some(id=>id===String(telegramChatId)||telegramAdminChatId&&id===String(telegramAdminChatId));}
-async function executeTelegramAction(action){const round=await currentRound();const snapshot=await capture(round);if(action==='sync')await rpc('fm_bot_import_snapshot',{access_key:autoSyncSecret,sample:snapshot});const published=await publishTelegramStatus(snapshot,'LIVE',{force:true});return {round,snapshot,published};}
-async function sendNext(chatId){const info=await rpc('fm_next_round_for_bot',{access_key:autoSyncSecret});await telegramApi('sendMessage',{chat_id:chatId,text:buildNextMessage(info),reply_markup:{inline_keyboard:[[{text:'Apri FANTAMONITOR',url:appUrl}]]}});}
+async function sendNext(league,chatId){
+  const info=await rpc('fm_next_round_for_bot',withKey({league:league.id}));
+  await telegramApi('sendMessage',{chat_id:chatId,text:buildNextMessage(info),reply_markup:{inline_keyboard:[[{text:'Apri FANTAMONITOR',url:`${appUrl}/l/${league.slug}`}]]}});
+}
+function chatIdOf(update){
+  return update.callback_query?.message?.chat?.id ?? update.message?.chat?.id ?? update.channel_post?.chat?.id ?? null;
+}
 async function handleTelegramUpdate(update){
-  if(!telegramUpdateAuthorized(update))return;
+  // Una chat sconosciuta viene ignorata: è il punto in cui un messaggio potrebbe finire
+  // nel canale di un'altra lega, il fallimento peggiore possibile per questo prodotto.
+  const league=leagueForChat(chatIdOf(update),await loadLeagues());
+  if(!league)return;
   const callback=update.callback_query;
   if(callback){
     try{
-      if(callback.data==='next'){await telegramApi('answerCallbackQuery',{callback_query_id:callback.id,text:'Calendario aggiornato'});await sendNext(callback.message.chat.id);return;}
-      await telegramApi('answerCallbackQuery',{callback_query_id:callback.id,text:callback.data==='sync'?'Sincronizzazione avviata':'Aggiornamento avviato'});await executeTelegramAction(callback.data==='sync'?'sync':'status');
-    }catch(e){console.error('telegram_callback_failed',{error:String(e)});await notifyAdmin(String(e));}
+      if(callback.data==='next'){await telegramApi('answerCallbackQuery',{callback_query_id:callback.id,text:'Calendario aggiornato'});await sendNext(league,callback.message.chat.id);return;}
+      await telegramApi('answerCallbackQuery',{callback_query_id:callback.id,text:callback.data==='sync'?'Sincronizzazione avviata':'Aggiornamento avviato'});
+      await executeTelegramAction(league,callback.data==='sync'?'sync':'status');
+    }catch(e){console.error('telegram_callback_failed',{league:league.slug,error:String(e)});await notifyAdmin(league,String(e));}
     return;
   }
-  const msg=update.message||update.channel_post;const text=String(msg?.text||'').split('@')[0].trim().toLowerCase();if(!['/status','/missing','/next','/sync','/stats','/help'].includes(text))return;
+  const msg=update.message||update.channel_post;
+  const text=String(msg?.text||'').split('@')[0].trim().toLowerCase();
+  if(!['/status','/missing','/next','/sync','/stats','/help'].includes(text))return;
   if(text==='/help'){await telegramApi('sendMessage',{chat_id:msg.chat.id,text:'Comandi disponibili:\n/status — stato attuale\n/missing — sole squadre mancanti\n/next — prossima giornata e orario\n/sync — forza lettura e salvataggio\n/stats — apre le statistiche web\n/help — mostra i comandi'});return;}
-  if(text==='/next'){await sendNext(msg.chat.id);return;}
-  if(text==='/stats'){await telegramApi('sendMessage',{chat_id:msg.chat.id,text:'Statistiche FANTAMONITOR',reply_markup:{inline_keyboard:[[{text:'Apri statistiche',url:`${appUrl}/stats`}]]}});return;}
+  if(text==='/next'){await sendNext(league,msg.chat.id);return;}
+  if(text==='/stats'){await telegramApi('sendMessage',{chat_id:msg.chat.id,text:`Statistiche ${league.name}`,reply_markup:{inline_keyboard:[[{text:'Apri statistiche',url:`${appUrl}/l/${league.slug}/stats`}]]}});return;}
   try{
-    if(text==='/missing'){const round=await currentRound();const snapshot=await capture(round);await publishTelegramStatus(snapshot,'LIVE',{force:true});if(String(msg.chat.id)!==String(telegramChatId))await telegramApi('sendMessage',{chat_id:msg.chat.id,text:buildMissingMessage(snapshot)});return;}
-    const result=await executeTelegramAction(text==='/sync'?'sync':'status');if(String(msg.chat.id)!==String(telegramChatId))await telegramApi('sendMessage',{chat_id:msg.chat.id,text:buildTelegramMessage(result.snapshot,'LIVE')});
-  }catch(e){console.error('telegram_command_failed',{error:String(e)});await notifyAdmin(String(e));}
+    if(text==='/missing'){
+      const snapshot=await capture(league,await currentRound(league));
+      await publishTelegramStatus(league,snapshot,'LIVE',{force:true});
+      if(String(msg.chat.id)!==String(league.telegramChatId))await telegramApi('sendMessage',{chat_id:msg.chat.id,text:buildMissingMessage(snapshot)});
+      return;
+    }
+    const result=await executeTelegramAction(league,text==='/sync'?'sync':'status');
+    if(String(msg.chat.id)!==String(league.telegramChatId))await telegramApi('sendMessage',{chat_id:msg.chat.id,text:buildTelegramMessage(result.snapshot,'LIVE')});
+  }catch(e){console.error('telegram_command_failed',{league:league.slug,error:String(e)});await notifyAdmin(league,String(e));}
 }
-async function configureTelegramWebhook(){if(!telegramBotToken||!telegramChatId)return;await telegramApi('setWebhook',{url:`${publicUrl}/telegram/webhook`,secret_token:telegramWebhookSecret,allowed_updates:['message','channel_post','callback_query'],drop_pending_updates:false});await telegramApi('setMyCommands',{commands:[{command:'status',description:'Stato formazioni'},{command:'missing',description:'Squadre senza formazione'},{command:'next',description:'Prossima giornata'},{command:'sync',description:'Forza sincronizzazione'},{command:'stats',description:'Statistiche web'},{command:'help',description:'Comandi disponibili'}]}).catch(()=>{});console.info('telegram_webhook_configured',{url:`${publicUrl}/telegram/webhook`});}
+async function configureTelegramWebhook(){
+  if(!telegramBotToken)return;
+  await telegramApi('setWebhook',{url:`${publicUrl}/telegram/webhook`,secret_token:telegramWebhookSecret,allowed_updates:['message','channel_post','callback_query'],drop_pending_updates:false});
+  await telegramApi('setMyCommands',{commands:[
+    {command:'status',description:'Stato attuale delle formazioni'},{command:'missing',description:'Solo le squadre mancanti'},
+    {command:'next',description:'Prossima giornata e orario'},{command:'sync',description:'Forza lettura e salvataggio'},
+    {command:'stats',description:'Apri le statistiche'},{command:'help',description:'Mostra i comandi'}]});
+}
 
+// Il claim ora porta con sé la lega: due leghe possono avere checkpoint simultanei.
 async function runAutoSync(){
-  const claim=await rpc('fm_claim_due_auto_sync',{access_key:autoSyncSecret});if(!claim)return {status:'no_due_checkpoint'};const round=Number(claim.round),checkpoint=String(claim.checkpoint);
-  try{const snapshot=await capture(round);const result=await rpc('fm_complete_auto_sync',{access_key:autoSyncSecret,day:round,checkpoint_name:checkpoint,sample:snapshot});let telegram={status:'skipped'};try{telegram=await publishTelegramStatus(snapshot,checkpoint);}catch(e){console.error('telegram_notification_failed',{round,checkpoint,error:String(e)});await notifyAdmin(`Giornata ${round} ${checkpoint}: ${String(e)}`);}console.info('auto_sync_complete',{round,checkpoint,inserted:snapshot.inserted,telegram:telegram.status});return {status:'success',round,checkpoint,telegram:telegram.status,result};}
-  catch(error){const message=error instanceof Error?error.message:'auto_sync_failed';await rpc('fm_fail_auto_sync',{access_key:autoSyncSecret,day:round,checkpoint_name:checkpoint,error_text:message}).catch(()=>{});await notifyAdmin(`Auto-sync fallito: ${message}`);throw error;}
+  const claim=await rpc('fm_claim_due_auto_sync',withKey({}));
+  if(!claim)return {status:'no_due_checkpoint'};
+  const leagues=await loadLeagues({force:true});
+  const league=leagues.find(l=>l.id===claim.league_id);
+  const round=Number(claim.round),checkpoint=String(claim.checkpoint);
+  if(!league){await rpc('fm_fail_auto_sync',withKey({day:round,checkpoint_name:checkpoint,error_text:'unknown_league'})).catch(()=>{});return {status:'unknown_league'};}
+  try{
+    const snapshot=await capture(league,round);
+    const result=await rpc('fm_complete_auto_sync',withKey({day:round,checkpoint_name:checkpoint,sample:snapshot}));
+    let telegram={status:'skipped'};
+    try{telegram=await publishTelegramStatus(league,snapshot,checkpoint);}
+    catch(e){console.error('telegram_notification_failed',{league:league.slug,round,checkpoint,error:String(e)});}
+    return {status:'completed',league:league.slug,round,checkpoint,result,telegram};
+  }catch(error){
+    const message=error instanceof Error?error.message:'auto_sync_failed';
+    await rpc('fm_fail_auto_sync',withKey({day:round,checkpoint_name:checkpoint,error_text:message})).catch(()=>{});
+    await notifyAdmin(league,`Auto-sync fallito (giornata ${round}, ${checkpoint}): ${message}`);
+    throw error;
+  }
 }
 
 const server=http.createServer(async(req,res)=>{
   let raw='';for await(const chunk of req)raw+=chunk;
+  if(req.method==='GET'&&req.url==='/health')return plainJson(res,200,{ok:true,...browserStats()});
   if(req.method==='POST'&&req.url==='/telegram/webhook'){
     if(!telegramWebhookSecret||String(req.headers['x-telegram-bot-api-secret-token']||'')!==telegramWebhookSecret)return plainJson(res,401,{error:'unauthorized'});
-    let update;try{update=JSON.parse(raw||'{}');}catch{return plainJson(res,400,{error:'invalid_json'});}plainJson(res,200,{ok:true});handleTelegramUpdate(update).catch(async e=>{console.error('telegram_webhook_failed',{error:String(e)});await notifyAdmin(String(e));});return;
+    let update;try{update=JSON.parse(raw||'{}');}catch{return plainJson(res,400,{error:'invalid_json'});}
+    plainJson(res,200,{ok:true});
+    handleTelegramUpdate(update).catch(e=>console.error('telegram_webhook_failed',{error:String(e)}));
+    return;
   }
-  if(req.method==='POST'&&req.url==='/sync'){
-    const ts=String(req.headers['x-fm-timestamp']||Date.now());if(!auth(req,raw))return signedJson(res,401,{error:'unauthorized'},ts);
-    try{const round=Number(JSON.parse(raw).round);if(!Number.isInteger(round)||round<1||round>35)throw new Error('invalid_round');return signedJson(res,200,{snapshot:await capture(round)},ts);}catch(error){const code=error instanceof Error?error.message:'connector_failed';console.error('connector_failed',{code,secretFingerprint});return signedJson(res,code==='connector_auth_failed'?401:502,{error:code},ts);}
+  for(const [path,handler] of [
+    ['/sync',async body=>{const league=await requireLeague(body.league);return {snapshot:await capture(league,Number(body.round))};}],
+    ['/competition',async body=>{const league=await requireLeague(body.league);return {competition:await captureCompetition(league)};}],
+    ['/credential-check',async body=>{const league=await requireLeague(body.league);return await checkCredentials(league);}],
+  ]){
+    if(req.method!=='POST'||req.url!==path)continue;
+    const ts=String(req.headers['x-fm-timestamp']||Date.now());
+    if(!auth(req,raw))return signedJson(res,401,{error:'unauthorized'},ts);
+    try{return signedJson(res,200,await handler(JSON.parse(raw||'{}')),ts);}
+    catch(error){
+      const code=error instanceof Error?error.message:'connector_failed';
+      console.error('connector_failed',{path,code,secretFingerprint});
+      return signedJson(res,code==='connector_auth_failed'?401:code==='unknown_league'?404:502,{error:code},ts);
+    }
   }
   if(req.method==='POST'&&req.url==='/auto-sync'){
-    try{await verifyGithubAction(req);return plainJson(res,200,await runAutoSync());}catch(error){const code=error instanceof Error?error.message:'auto_sync_failed';console.error('auto_sync_failed',{code});return plainJson(res,code.startsWith('oidc_')?401:502,{error:code});}
+    try{await verifyGithubAction(req);return plainJson(res,200,await runAutoSync());}
+    catch(error){const code=error instanceof Error?error.message:'auto_sync_failed';console.error('auto_sync_failed',{code});
+      return plainJson(res,code.startsWith('oidc_')?401:502,{error:code});}
   }
   return plainJson(res,404,{error:'not_found'});
 });
-server.listen(port,()=>{console.log(`connector listening on ${port}`,{secretFingerprint,hasSecret:Boolean(secret),autoSyncConfigured:Boolean(autoSyncSecret&&supabaseUrl&&supabaseKey),telegramConfigured:Boolean(telegramBotToken&&telegramChatId),telegramAdminConfigured:Boolean(telegramAdminChatId)});configureTelegramWebhook().catch(async e=>{console.error('telegram_webhook_config_failed',{error:String(e)});await notifyAdmin(String(e));});});
+server.listen(port,()=>{
+  console.log(`connector listening on ${port}`,{secretFingerprint,hasSecret:Boolean(secret),
+    autoSyncConfigured:Boolean(autoSyncSecret&&supabaseUrl&&supabaseKey),
+    credentialKeyConfigured:credentialsConfigured(),
+    telegramConfigured:Boolean(telegramBotToken)});
+  loadLeagues().then(list=>console.log('leagues_loaded',{count:list.length,slugs:list.map(l=>l.slug)})).catch(e=>console.error('leagues_load_failed',{error:String(e)}));
+  configureTelegramWebhook().catch(e=>console.error('telegram_webhook_setup_failed',{error:String(e)}));
+});

@@ -1,6 +1,6 @@
 'use client';
 import { useCallback,useEffect,useState } from 'react';
-import { KeyRound,ShieldCheck,ShieldAlert } from 'lucide-react';
+import { KeyRound,PlugZap,ShieldCheck,ShieldAlert } from 'lucide-react';
 import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from '@/components/ui/dialog';
 import { Tabs,TabsList,TabsTrigger,TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,7 @@ export default function CredentialsDialog({config,canManage}:{config:LeagueConfi
   const [open,setOpen]=useState(false),[status,setStatus]=useState<Status|null>(null);
   const [mode,setMode]=useState('session'),[saving,setSaving]=useState(false),[error,setError]=useState(''),[done,setDone]=useState('');
   const [username,setUsername]=useState(''),[password,setPassword]=useState(''),[storageState,setStorageState]=useState('');
+  const [checking,setChecking]=useState(false);
   const read=useCallback(()=>fetch(`/api/credentials?league=${encodeURIComponent(config.slug)}`,{cache:'no-store'}).then(r=>r.json() as Promise<Status>),[config.slug]);
   const load=useCallback(async()=>{try{setStatus(await read());}catch{setStatus({error:'Stato non disponibile.'});}},[read]);
   useEffect(()=>{
@@ -33,6 +34,16 @@ export default function CredentialsDialog({config,canManage}:{config:LeagueConfi
       // Nulla torna indietro in chiaro: i campi si svuotano e resta solo lo stato.
       setPassword('');setStorageState('');setDone('Credenziali salvate e cifrate.');await load();
     }catch(e){setError(e instanceof Error?e.message:'Salvataggio non riuscito.');}finally{setSaving(false);}
+  }
+  async function verify(){
+    setChecking(true);setError('');setDone('');
+    try{
+      const response=await fetch(`/api/credentials?league=${encodeURIComponent(config.slug)}`,{method:'PUT',headers:{'Content-Type':'application/json'}});
+      const result=await response.json() as {error?:string;detail?:string|null};
+      if(!response.ok)throw new Error(result.error??'Verifica non riuscita.');
+      setDone(result.detail==='session_reused'?'Connessione verificata riusando la sessione salvata.':'Connessione verificata: è stato eseguito un nuovo accesso.');
+      await load();
+    }catch(e){setError(e instanceof Error?e.message:'Verifica non riuscita.');}finally{setChecking(false);}
   }
   if(!canManage)return null;
   return <>
@@ -66,7 +77,10 @@ export default function CredentialsDialog({config,canManage}:{config:LeagueConfi
       {error&&<p role="alert" className="import-error">{error}</p>}
       {done&&<p className="import-note">{done}</p>}
       <p className="footnote">L’accesso automatizzato è verosimilmente contrario ai termini d’uso di Fantacalcio e non prevede un percorso per l’autenticazione a due fattori. Chi collega l’account se ne assume il rischio.</p>
-      <button className="btn primary" disabled={saving||(mode==='session'?!storageState.trim():!username.trim()||!password)} onClick={save}><KeyRound/>{saving?'Salvataggio…':'Salva e cifra'}</button>
+      <div className="credential-actions">
+        <button className="btn primary" disabled={saving||checking||(mode==='session'?!storageState.trim():!username.trim()||!password)} onClick={save}><KeyRound/>{saving?'Salvataggio…':'Salva e cifra'}</button>
+        <button className="btn" disabled={saving||checking||!connected} onClick={verify}><PlugZap/>{checking?'Verifica…':'Verifica connessione'}</button>
+      </div>
     </DialogContent></Dialog>
   </>;
 }

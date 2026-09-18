@@ -17,12 +17,13 @@ npm run build        # next build --webpack
 npm run lint         # eslint
 npm run typecheck    # tsc --noEmit
 npm test             # node --experimental-strip-types --test tests/*.test.mjs
+node --test connector/tests/*.test.mjs   # connettore (funzioni pure, niente Playwright)
 ```
 
 Pipeline di validazione completa (identica a `.github/workflows/ci.yml`):
 
 ```bash
-npm ci && npx tsc --noEmit && npm run lint && node --test prototype/tests/collector.test.mjs && npm test && (cd prototype && python -m unittest discover -s tests -v) && npm run build
+npm ci && npx tsc --noEmit && npm run lint && node --test prototype/tests/collector.test.mjs && npm test && node --test connector/tests/*.test.mjs && (cd prototype && python -m unittest discover -s tests -v) && npm run build
 ```
 
 - Next.js 16.2.6 (App Router) · React 19.2 · TypeScript strict · Tailwind 4 ·
@@ -81,6 +82,10 @@ Browser ──► Next.js App Router (app/)
 - **`connector/`** — servizio Node separato (deploy Railway) che fa login su Fantacalcio
   con Playwright, cattura formazioni e competizione, notifica su Telegram ed esegue
   l'auto-sync a checkpoint. Ha un proprio `package.json`; non fa parte della build Next.
+  **Non contiene costanti di lega**: le legge da `fm_leagues_for_bot` con cache di 60 s.
+  `connector/lib/*.mjs` separa ciò che tocca Playwright da ciò che non lo tocca —
+  `snapshot.mjs`, `telegram.mjs`, `leagues.mjs`, `concurrency.mjs` e `fantacalcio.mjs` sono
+  testabili senza browser, ed è ciò che `connector/tests/` esercita in CI.
 - **`prototype/`** — adapter browser assistito (`collector.mjs`) e archivio evidenze
   Python (`monitor.py`). Fase storica, **ma i suoi test girano in CI**: non rimuoverla
   senza aggiornare `ci.yml`.
@@ -168,13 +173,13 @@ una, aggiornare tutte:
 
 | Costante | Punti |
 |---|---|
-| Elenco squadre | riga `fm_league_teams` ⇄ preset `lib/league.ts`; **copie residue** in `connector/server.mjs`, `connector/phase2-patch.mjs`, `prototype/collector.mjs` |
-| Intervallo giornate | `fm_leagues.round_count` ⇄ `lib/league.ts`; **copia residua** in `connector/server.mjs` |
-| Pattern `source_url` | `fm_leagues.slug`+`competition_id` ⇄ `leaguePath()`; **copie residue** nel connettore |
-| Scope lega/stagione/competizione | `fm_leagues` ⇄ `lib/league.ts`; **copie residue** in `connector/*` |
+| Elenco squadre | riga `fm_league_teams` ⇄ preset `lib/league.ts`; **copia residua** in `prototype/collector.mjs` |
+| Intervallo giornate | `fm_leagues.round_count` ⇄ `lib/league.ts` |
+| Pattern `source_url` | `fm_leagues.slug`+`competition_id` ⇄ `leaguePath()` ⇄ `manageLineupsUrl()` |
+| Scope lega/stagione/competizione | `fm_leagues` ⇄ `lib/league.ts` ⇄ `fm_leagues_for_bot` |
 
-SQL e TypeScript non sono più due copie da confrontare: leggono la **stessa riga**. Restano
-da allineare a mano solo il connettore e `prototype/collector.mjs`.
+SQL, TypeScript e connettore non sono più copie da confrontare: leggono la **stessa riga**.
+L'unica copia residua è `prototype/collector.mjs`, che è codice storico e non gira in prod.
 
 ## Storia della piattaforma
 
@@ -203,10 +208,16 @@ superato — la storia git li conserva, il repo no.
   considerare che invaliderebbe tutti gli id già archiviati.
 - `saveReview` usa concorrenza ottimistica via `expected_revision`: un 409
   (`ReviewConflict`) significa "rileggi e riprova", non "riprova uguale".
-- L'endpoint `/competition` del connettore **non** è in `server.mjs`: lo aggiunge
-  `phase2-patch.mjs`, caricato con `--import` da `connector/package.json`. Allo stesso
-  modo `phase1-patch.mjs` arricchisce le risposte dell'API Fantacalcio via monkey-patch
-  di `fetch` e `Object.entries`. Leggere entrambi prima di modificare il connettore.
+- I due monkey-patch del connettore (`phase1-patch.mjs`, `phase2-patch.mjs`) **non esistono
+  più**: patchavano `globalThis.fetch` e `Object.entries`, e il loro unico contesto era la
+  stringa dell'URL, quindi con più leghe non potevano sapere di quale lega stessero
+  arricchendo i dati. Le stesse trasformazioni sono ora `enrichTeam` / `enrichLineup` in
+  `connector/lib/fantacalcio.mjs`, chiamate esplicitamente da `capture.mjs`.
+- Un solo bot Telegram serve tutte le leghe: il suo webhook riceve gli update di ogni chat
+  in cui si trova, e `leagueForChat` mappa `chat_id → lega`. **Una chat sconosciuta si
+  ignora, non si indovina**: è il punto in cui un messaggio finirebbe nel canale sbagliato.
+- La sessione Playwright salvata è una scorciatoia, non una garanzia: si prova a navigare
+  direttamente, e al muro di login si rifà l'accesso completo. Non fidarsi del solo TTL.
 - `/api/performance` degrada: se il connettore non risponde usa l'ultimo snapshot
   archiviato che contenga `competition`, aggiungendo un warning esplicito.
 - `tests/postgres.test.mjs` esegue le migrazioni in PGlite con ruoli e `auth.uid()`
