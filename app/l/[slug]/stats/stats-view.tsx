@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect,useMemo,useState } from 'react';
-import { ArrowLeft,BarChart3,Clock3,TriangleAlert,Activity,Trophy,TrendingDown,Target,Shield,Flame,Scale,ChartNoAxesCombined,Gauge,Swords,Crown } from 'lucide-react';
+import { ArrowLeft,BarChart3,Clock3,TriangleAlert,TrendingDown,Target,Shield,Flame,Scale,ChartNoAxesCombined,Gauge,Swords,Crown } from 'lucide-react';
 import { initials,type Archive,type Snapshot } from '@/lib/model';
 import { teamColor,teamNames,type LeagueConfig } from '@/lib/league';
 import { computePerformance,classifyTeam,type PerformancePayload,type TeamPerformance,type MatchResult } from '@/lib/performance';

@@ -32,6 +32,24 @@ const eslintConfig = defineConfig([
     },
   },
   {
+    // `const {id, revision, ...body} = x` is how this codebase drops keys: the named
+    // bindings are meant to be unused, the rest is the point. That is exactly what
+    // `ignoreRestSiblings` describes; without it the rule asks for worse code.
+    rules: {
+      "@typescript-eslint/no-unused-vars": ["warn", { ignoreRestSiblings: true }],
+    },
+  },
+  {
+    // Crests and kits are ~26px avatars served from Fantacalcio's own CDN, on a private
+    // dashboard with a handful of users. `next/image` would need `remotePatterns` for a
+    // host we do not control and would route every thumbnail through the paid optimizer,
+    // which the rule's own message warns about. The trade does not pay here.
+    files: ["app/dashboard.tsx", "app/team-detail.tsx", "app/fantasy-pitch.tsx"],
+    rules: {
+      "@next/next/no-img-element": "off",
+    },
+  },
+  {
     files: ["components/ui/**/*.{ts,tsx}", "hooks/use-mobile.ts"],
     rules: {
       // These files are vendored verbatim from shadcn@4.17.0. Keep the
