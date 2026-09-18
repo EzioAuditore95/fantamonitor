@@ -114,6 +114,57 @@ Railway può anche ospitare la stessa web app al posto di Vercel usando
 sia nella build sia nel runtime e configurare un dominio HTTPS del servizio.
 Questa configurazione ospita la web app, non il connettore automatico.
 
+## Credenziali Fantacalcio per lega
+
+Ogni lega collega il proprio account amministratore di `leghe.fantacalcio.it` dal dialog
+**Account Fantacalcio** nel banner della dashboard. Il segreto viaggia in una busta ibrida
+(AES-256-GCM con chiave casuale per messaggio, sigillata con RSA-OAEP-SHA256 a 3072 bit) e
+viene scritto in `fm_league_credentials`, una tabella **senza policy RLS e senza grant per
+`authenticated`**: il ciphertext non è rileggibile dall'app, nemmeno da chi lo ha scritto.
+
+La coppia di chiavi è asimmetrica apposta: la web app è la superficie esposta a internet che
+accetta input utente, e ha **solo** la chiave pubblica. Una sua compromissione non rivela
+alcuna credenziale.
+
+### Generare la coppia
+
+```sh
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out fm-credential.key
+openssl pkey -in fm-credential.key -pubout -out fm-credential.pub
+base64 -i fm-credential.pub | tr -d '\n'   # → FM_CREDENTIAL_PUBLIC_KEY  (web app)
+base64 -i fm-credential.key | tr -d '\n'   # → FM_CREDENTIAL_PRIVATE_KEY (solo connettore)
+```
+
+- `FM_CREDENTIAL_PUBLIC_KEY` va su Vercel (o sul servizio web di Railway).
+- `FM_CREDENTIAL_PRIVATE_KEY` va **solo** sul servizio connettore su Railway.
+- I due file locali vanno distrutti dopo aver impostato le variabili: non finiscono nel repo
+  e non esistono copie di backup della chiave privata oltre alla variabile Railway.
+
+### Rotazione
+
+Da fare almeno a fine stagione, e subito se si sospetta una fuga:
+
+1. genera una nuova coppia con il comando sopra;
+2. aggiorna `FM_CREDENTIAL_PUBLIC_KEY` sulla web app;
+3. chiedi a ogni amministratore di ricollegare il proprio account dal dialog — il salvataggio
+   azzera `last_verified_at`, quindi le leghe non ancora ricollegate sono visibili a colpo d'occhio;
+4. aggiorna `FM_CREDENTIAL_PRIVATE_KEY` sul connettore e rimuovi la chiave vecchia.
+
+Il campo `key_version` consente di distinguere le buste durante la transizione senza migrazioni.
+
+### Rischio da dichiarare
+
+La pagina letta dal connettore è `manage-lineups`, cioè la sezione **Admin** della lega: una
+sessione compromessa può **modificare** le formazioni altrui, non solo leggerle, e con N leghe
+collegate il danno si moltiplica. Per questo il dialog propone come prima opzione la
+**sessione** (`storageState`) invece della password: si revoca con un logout su Fantacalcio,
+scade da sola e non lascia in giro una password. L'accesso automatizzato è inoltre
+verosimilmente contrario ai termini d'uso di Fantacalcio e non prevede un percorso per la 2FA.
+
+Nei log non compaiono mai il testo in chiaro né lo `storageState`: solo
+`credential_sealed {league, mode, usernameFingerprint}`, con il fingerprint a 12 esadecimali,
+la stessa convenzione di `secretFingerprint` in `lib/sync.ts`.
+
 ## Verifiche
 
 ```sh

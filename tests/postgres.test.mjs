@@ -224,4 +224,48 @@ test('the single-league bridge refuses to guess while two leagues are active',as
   await assert.rejects(asUser(alphaAdmin,'select fm_save_review($1::jsonb,0)',[JSON.stringify({...review,note:'Tentativo con revisione superata.'})]),/review_conflict/);
  }finally{ await db.query('update fm_leagues set active=true where id=$1',[BETA]); }
 });
+const SEALED='v1.'+'a'.repeat(40)+'.'+'b'.repeat(16)+'.'+'c'.repeat(22)+'.'+'d'.repeat(30);
+const setCredsSql='select fm_set_league_credentials($1::uuid,$2,$3,$4::int,$5::timestamptz) as result';
+const statusSql='select fm_league_credential_status($1::uuid) as status';
+// Il divieto di rilettura in chiaro è imposto dal database, non dalle route: non esiste
+// alcuna policy e nessun grant, quindi non c'è nulla da leggere nemmeno sbagliando una route.
+test('the ciphertext is unreadable to every logged-in user, admins included',async()=>{
+ for(const who of [alphaAdmin,alphaViewer,betaAdmin,bothUser])
+  await assert.rejects(asUser(who,'select * from fm_league_credentials'),/permission denied/,who);
+ await assert.rejects(asUser(alphaAdmin,'select payload from fm_league_credentials where league_id=$1',[ALPHA]),/permission denied/);
+ // Anche la funzione di lettura del connettore è fuori portata per una sessione utente.
+ await assert.rejects(asUser(alphaAdmin,'select fm_league_credentials_for_bot($1,$2::uuid)',['qualsiasi',ALPHA]),/permission denied/);
+ await assert.rejects(db.query('select fm_league_credentials_for_bot($1,$2::uuid)',['chiave-sbagliata',ALPHA]),/unauthorized/);
+});
+test('only the admin of that league can store its credentials',async()=>{
+ await assert.rejects(asUser(alphaViewer,setCredsSql,[ALPHA,'password',SEALED,1,null]),/admin_required/);
+ await assert.rejects(asUser(betaAdmin,setCredsSql,[ALPHA,'password',SEALED,1,null]),/admin_required/);
+ await assert.rejects(asUser(stranger,setCredsSql,[ALPHA,'password',SEALED,1,null]),/admin_required/);
+ // bothUser è viewer su beta: può su alpha, non su beta.
+ await assert.rejects(asUser(bothUser,setCredsSql,[BETA,'password',SEALED,1,null]),/admin_required/);
+ assert.deepEqual((await asUser(bothUser,setCredsSql,[ALPHA,'password',SEALED,1,null])).rows[0].result,{saved:true});
+});
+test('only a well-formed envelope is accepted, and the mode is closed',async()=>{
+ await assert.rejects(asUser(alphaAdmin,setCredsSql,[ALPHA,'password','non-una-busta',1,null]),/invalid_credential_payload/);
+ await assert.rejects(asUser(alphaAdmin,setCredsSql,[ALPHA,'token',SEALED,1,null]),/invalid_credential_mode/);
+});
+test('status exposes metadata only, and never to another league',async()=>{
+ const status=(await asUser(alphaViewer,statusSql,[ALPHA])).rows[0].status;
+ assert.equal(status.configured,true);
+ assert.equal(status.hasSession,false);
+ for(const key of Object.keys(status))assert.ok(!['payload','sessionState','session_state'].includes(key),key);
+ await assert.rejects(asUser(alphaViewer,statusSql,[BETA]),/forbidden/);
+ assert.deepEqual((await asUser(betaViewer,statusSql,[BETA])).rows[0].status,{configured:false,hasSession:false});
+});
+test('storing a session leaves the password alone and resets the verification',async()=>{
+ await db.query("update fm_league_credentials set last_verified_at=now(),last_verified_status='ok' where league_id=$1",[ALPHA]);
+ const expires='2099-01-01T00:00:00Z';
+ assert.deepEqual((await asUser(alphaAdmin,setCredsSql,[ALPHA,'session',SEALED,1,expires])).rows[0].result,{saved:true});
+ const status=(await asUser(alphaAdmin,statusSql,[ALPHA])).rows[0].status;
+ assert.equal(status.configured,true,'la password resta');
+ assert.equal(status.hasSession,true);
+ // Un segreto nuovo invalida la verifica del precedente.
+ assert.equal(status.lastVerifiedAt,null);
+ assert.equal(status.lastVerifiedStatus,null);
+});
 after(async()=>{await db.close();});

@@ -71,6 +71,9 @@ Browser ──► Next.js App Router (app/)
     parametriche sulla `LeagueConfig`.
   - `archive.ts` / `reviews.ts` — letture paginate (500/pagina) e scritture via RPC.
   - `sync.ts` — chiamate firmate al connettore.
+  - `credentials.ts` — busta ibrida AES-256-GCM + RSA-OAEP (`v1.<chiave>.<iv>.<tag>.<dati>`).
+    `open()` sta qui solo per tenere il formato in un posto e per il test di andata e
+    ritorno: **la web app non deve mai chiamarla con una chiave reale.**
   - `performance.ts` / `lineup-analytics.ts` — calcoli puri, nessun I/O.
 - **`supabase/migrations/`** — sorgente di verità dello schema. Le RPC leggono i limiti da
   `fm_leagues` e replicano in SQL la validazione fatta in Zod; `lib/league.ts` legge la
@@ -132,8 +135,12 @@ Altre regole ferme:
 - Messaggi d'errore verso l'utente: in italiano, senza dettagli tecnici. La diagnostica
   va in `console.error` con codice breve (es. `archive_read_failed`) e, per il
   connettore, `secretFingerprint` (12 hex) — **mai il segreto**.
-- `.env*` è ignorato (eccetto `.env.example`). Credenziali Fantacalcio e token Telegram
-  vivono solo su Railway.
+- Le credenziali Fantacalcio **per lega** stanno cifrate in `fm_league_credentials`, tabella
+  con RLS e **nessuna policy né grant per `authenticated`**: il ciphertext non è rileggibile
+  dall'app. La web app ha solo `FM_CREDENTIAL_PUBLIC_KEY` e può soltanto sigillare; la chiave
+  privata vive **solo** sul connettore. Vedi [deploy/README.md](deploy/README.md) per
+  generazione e rotazione. Mai loggare il chiaro: solo `usernameFingerprint` a 12 hex.
+- `.env*` è ignorato (eccetto `.env.example`). Il token Telegram vive solo su Railway.
 
 ## Convenzioni di codice
 

@@ -99,6 +99,11 @@ button:focus-visible,a:focus-visible { outline:3px solid var(--brand-orange); ou
 .league-switch a[aria-current=page] { background:var(--brand-navy); border-color:var(--brand-navy); color:#fff }
 .league-picker { list-style:none; margin:18px 0 0; padding:0; display:grid; gap:10px; width:100% }
 .league-picker a { display:block; padding:13px 16px; border-radius:6px; border:1px solid #cbd8e8; background:#fff; color:var(--brand-navy); font-weight:700; text-decoration:none }
+.league-tools { display:flex; align-items:center; gap:10px; flex-wrap:wrap }
+.credential-chip { display:inline-flex; align-items:center; gap:7px; min-height:34px; padding:5px 12px; border-radius:4px; border:1px solid #cbd8e8; background:#fff; color:var(--brand-blue); font-size:.8125rem; font-weight:700; cursor:pointer }
+.credential-chip svg { width:15px; height:15px }
+.credential-state { border:1px solid #e2e9f2; border-radius:6px; padding:12px 14px; margin:4px 0 12px; display:grid; gap:4px }
+.credential-state p { margin:0; font-size:.875rem }
 .muted { color:var(--muted-foreground) } .micro { font-size:.8125rem }
 .eyebrow { font-size:.8125rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted-foreground) }
 .navigation { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:0 18px; background:#fff; border:1px solid var(--border); border-radius:6px; margin-bottom:28px; box-shadow:0 2px 4px #16355a05 }
