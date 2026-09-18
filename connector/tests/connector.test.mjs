@@ -14,7 +14,7 @@ const beta={id:'league-b',slug:'beta',name:'Beta',season:'2026-2027',competition
  telegramChatId:'-100222',telegramThreadId:null,telegramAdminChatId:null,teams:['B1','B2']};
 const leagues=[alpha,beta];
 
-// È il punto in cui un messaggio può finire nel canale di un'altra lega.
+// This is where a message could end up in another league's channel.
 test('an update is routed to the league that owns its chat, or to none',()=>{
  assert.equal(leagueForChat('-100111',leagues),alpha);
  assert.equal(leagueForChat(-100222,leagues),beta,'un id numerico vale come stringa');
@@ -22,7 +22,7 @@ test('an update is routed to the league that owns its chat, or to none',()=>{
  assert.equal(leagueForChat('-100333',leagues),null,'chat sconosciuta: si ignora, non si indovina');
  assert.equal(leagueForChat(null,leagues),null);
  assert.equal(leagueForChat('-100111',[]),null);
- // Una lega senza chat configurata non deve catturare gli update con chat_id nullo.
+ // A league with no chat configured must not swallow updates with a null chat id.
  assert.equal(leagueForChat(null,[{...alpha,telegramChatId:null,telegramAdminChatId:null}]),null);
  assert.equal(leagueBySlug('beta',leagues),beta);
  assert.equal(leagueBySlug('inesistente',leagues),null);
@@ -136,7 +136,7 @@ test('the queue caps concurrency and serializes work per league', async()=>{
  ]);
  assert.deepEqual(order.slice(-2),['a1','a2'],'stessa lega: in sequenza');
  assert.ok(order.includes('b1'));
- // Un fallimento non deve bloccare la catena: il prossimo task parte comunque.
+ // A failure must not stall the chain: the next task still runs.
  await assert.rejects(mutex.run('x',()=>Promise.reject(new Error('boom'))));
  assert.equal(await mutex.run('x',()=>'ok'),'ok');
  await new Promise(r=>setTimeout(r,0)); // la pulizia della catena avviene in un microtask successivo

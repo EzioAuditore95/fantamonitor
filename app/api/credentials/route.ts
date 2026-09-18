@@ -24,7 +24,7 @@ export async function GET(request:Request){
 }
 
 export async function PUT(request:Request){
-  // Verifica della connessione: il connettore fa solo il login, nessuna cattura.
+  // Connection check: the connector only logs in, it captures nothing.
   const ctx=await requireLeagueMember(new URL(request.url).searchParams.get('league'));
   if(ctx instanceof Response)return ctx;
   const {user,cfg}=ctx;
@@ -57,12 +57,12 @@ export async function POST(request:Request){
     let sealed:string,expiresAt:string|null=null;
     if(input.mode==='password'){
       sealed=seal(JSON.stringify({u:input.username,p:input.password}));
-      // Mai lo username in chiaro: stessa convenzione di secretFingerprint in lib/sync.ts.
+      // Never the username in clear text: same convention as secretFingerprint in lib/sync.ts.
       console.info('credential_sealed',{league:cfg.slug,mode:'password',usernameFingerprint:await fingerprint(input.username)});
     }else{
       try{JSON.parse(input.storageState);}catch{return Response.json({error:'La sessione non contiene JSON valido.'},{status:422,headers});}
       sealed=seal(input.storageState);
-      // La sessione Fantacalcio scade da sola: 12 h è il limite oltre il quale il connettore rifà il login.
+      // A Fantacalcio session expires on its own: past 12h the connector logs in again.
       expiresAt=new Date(Date.now()+12*60*60*1000).toISOString();
       console.info('credential_sealed',{league:cfg.slug,mode:'session',bytes:input.storageState.length});
     }

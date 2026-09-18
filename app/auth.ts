@@ -7,8 +7,8 @@ export async function getAppUser():Promise<AppUser|null>{
   const supabase=await createClient();
   const {data:{user},error}=await supabase.auth.getUser();
   if(error||!user)return null;
-  // Una membership per lega: finché l'app è a lega singola si usa la prima, ordinata
-  // in modo stabile. La risoluzione per slug arriva con le route /l/[slug].
+  // One membership per league: while the app is single-league it takes the first, in a
+  // stable order. Resolution by slug arrives with the /l/[slug] routes.
   const {data:memberships,error:dbError}=await supabase.from('fm_memberships').select('league_id,role').eq('user_id',user.id).order('league_id').limit(1);
   if(dbError)throw new Error('Membership unavailable');
   const membership=memberships?.[0];
@@ -17,8 +17,8 @@ export async function getAppUser():Promise<AppUser|null>{
 }
 
 const headers={'Cache-Control':'private, no-store'};
-// Concentra i controlli che ogni route ripeterebbe: sessione, appartenenza alla lega
-// richiesta, lega inesistente. Torna una Response da restituire così com'è.
+// Concentrates the checks every route would otherwise repeat: session, membership of the
+// requested league, unknown league. Returns a Response to be handed back as is.
 export async function requireLeagueMember(slug:string|null):Promise<{user:AppUser;cfg:LeagueConfig}|Response>{
   const user=await getAppUser();
   if(!user)return Response.json({error:'Accesso richiesto.'},{status:401,headers});

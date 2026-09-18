@@ -7,7 +7,7 @@ export default async function Home(){
   const supabase=await createClient();
   const {data:{user},error}=await supabase.auth.getUser();
   if(error||!user)redirect('/login');
-  // La RLS restituisce solo le leghe dell'utente: nessuna riga = account non abilitato.
+  // RLS returns only the user's leagues: no rows means the account is not enabled yet.
   const leagues=await listMyLeagues();
   if(!leagues.length)return <main className="login-shell"><div className="brand-mark">FM</div><h1>Account non abilitato</h1><p>L’accesso è riuscito, ma questo account non appartiene ancora a nessuna lega. Chiedi all’amministratore di abilitarlo.</p><form action="/api/auth/logout" method="post"><button className="btn primary" type="submit">Esci</button></form></main>;
   if(leagues.length===1)redirect(`/l/${leagues[0].slug}`);

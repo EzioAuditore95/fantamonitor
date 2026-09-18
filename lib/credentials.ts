@@ -1,9 +1,9 @@
 import { constants,createCipheriv,createDecipheriv,privateDecrypt,publicEncrypt,randomBytes } from 'node:crypto';
 
-// Busta ibrida: chiave AES casuale per messaggio, sigillata con RSA-OAEP. Serve perché lo
-// storageState di Playwright supera abbondantemente il limite di RSA, e usare un solo
-// formato evita di dover scegliere lo schema in base alla dimensione del segreto.
-// Formato: v1.<rsa(chiave AES)>.<iv>.<tag>.<ciphertext>, tutti in base64url.
+// Hybrid envelope: a random AES key per message, sealed with RSA-OAEP. Playwright's
+// storageState is far past RSA's size limit, and a single format means never picking a
+// scheme based on how big the secret happens to be.
+// Layout: v1.<rsa(aes key)>.<iv>.<tag>.<ciphertext>, all base64url.
 const VERSION='v1';
 const b64=(b:Buffer)=>b.toString('base64url');
 const unb64=(s:string)=>Buffer.from(s,'base64url');
@@ -21,9 +21,9 @@ export function seal(plaintext:string,publicKey:string=credentialPublicKey()??''
   return [VERSION,b64(sealedKey),b64(iv),b64(cipher.getAuthTag()),b64(body)].join('.');
 }
 
-// Apre una busta. La chiave privata vive SOLO sul connettore: la web app non deve mai
-// chiamare questa funzione con una chiave reale — esiste qui per tenere il formato in
-// un posto solo e per il test di andata e ritorno.
+// Opens an envelope. The private key lives ONLY on the connector: the web app must never
+// call this with a real key — it is here to keep the format in one place and to make the
+// round-trip test possible.
 export function open(sealed:string,privateKey:string):string{
   const parts=sealed.split('.');
   if(parts.length!==5||parts[0]!==VERSION)throw new Error('Busta non riconosciuta.');
@@ -34,7 +34,7 @@ export function open(sealed:string,privateKey:string):string{
   return Buffer.concat([decipher.update(unb64(body)),decipher.final()]).toString('utf8');
 }
 
-// Convenzione già usata per secretFingerprint in lib/sync.ts: identifica senza rivelare.
+// Same convention as secretFingerprint in lib/sync.ts: identifies without revealing.
 export async function fingerprint(value:string){
   const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));
   return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('').slice(0,12);

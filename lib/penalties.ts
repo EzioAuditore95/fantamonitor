@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { AGGREGATE_PERIOD,findPeriod,leaguePath,periodForRound,type LeagueConfig } from './league.ts';
 
-// Chiave di un periodo della lega, oppure AGGREGATE_PERIOD per l'intera stagione.
+// A period key of the league, or AGGREGATE_PERIOD for the whole season.
 export type Period = string;
 export function makeReviewInputSchema(cfg:LeagueConfig){
   const prefix=leaguePath(cfg);
@@ -33,7 +33,7 @@ export function teamBalance(cfg:LeagueConfig,team:string,period:string,reviews:R
   const latest=latestReviews(reviews);
   const rounds=findPeriod(cfg,period).rounds;
   const known=rounds.map(round=>latest.get(reviewKey(team,round))).filter((r):r is Review=>!!r&&r.status!=='unverified');
-  // Il gettone copre l'omissione più antica del periodo, anche con inserimenti retroattivi.
+  // The token covers the oldest omission of the period, even for backdated entries.
   const missed=known.filter(r=>r.status==='missed').sort((a,b)=>a.round-b.round);
   return {team,period,missed:missed.length,verified:known.length,total:rounds.length,
     remaining:Math.max(0,cfg.freeTokens-missed.length),used:Math.min(cfg.freeTokens,missed.length),

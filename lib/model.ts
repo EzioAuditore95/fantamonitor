@@ -61,8 +61,8 @@ export function makeSnapshotSchema(cfg:LeagueConfig){
     if(Date.parse(s.observed_at)>Date.now()+60000)bad('La lettura ha una data futura.');
   });
 }
-// Lo schema si ricostruisce solo quando la configurazione cambia davvero: listSnapshots
-// fa il parse di ogni riga e la chiave include updatedAt per invalidare la cache.
+// The schema is rebuilt only when the config really changes: listSnapshots parses every
+// row, and updatedAt in the key is what invalidates the cache.
 const schemaCache=new Map<string,ReturnType<typeof makeSnapshotSchema>>();
 export function snapshotSchemaFor(cfg:LeagueConfig){
   const key=`${cfg.id}:${cfg.updatedAt}`;

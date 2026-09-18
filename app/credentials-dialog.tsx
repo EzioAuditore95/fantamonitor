@@ -31,7 +31,7 @@ export default function CredentialsDialog({config,canManage}:{config:LeagueConfi
       const response=await fetch(`/api/credentials?league=${encodeURIComponent(config.slug)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       const result=await response.json() as {error?:string};
       if(!response.ok)throw new Error(result.error??'Salvataggio non riuscito.');
-      // Nulla torna indietro in chiaro: i campi si svuotano e resta solo lo stato.
+      // Nothing comes back in clear text: the fields are cleared and only status remains.
       setPassword('');setStorageState('');setDone('Credenziali salvate e cifrate.');await load();
     }catch(e){setError(e instanceof Error?e.message:'Salvataggio non riuscito.');}finally{setSaving(false);}
   }

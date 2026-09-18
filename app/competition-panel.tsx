@@ -34,7 +34,7 @@ function standingsThrough(teams:string[],calendar:Round[],throughRound:number):S
 export default function CompetitionPanel({config}:{config:LeagueConfig}){
   const cfg=config;
   const TEAM_NAMES=useMemo(()=>teamNames(cfg),[cfg]);
-  // Il girone di andata e il montepremi sono parametri della lega, non costanti.
+  // The first half and the prize pot are league parameters, not constants.
   const FIRST_HALF_END=cfg.periods[0].rounds[cfg.periods[0].rounds.length-1];
   const FORMULA_ONE_BASE=Number(cfg.rules.formula_one_base_eur??0);
   const EUROPE_TOP=Number(cfg.rules.europe_top??Math.floor(cfg.teamCount/2));

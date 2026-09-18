@@ -14,7 +14,7 @@ test('a sealed secret only opens with the matching private key',()=>{
  assert.throws(()=>open(sealed,other.privateKey));
 });
 test('the envelope carries a storageState far larger than RSA could hold',()=>{
- // Lo storageState di Playwright è dell'ordine dei KB: è il motivo della busta ibrida.
+ // Playwright's storageState is kilobytes: that is the reason for the hybrid envelope.
  const state=JSON.stringify({cookies:Array.from({length:120},(_,i)=>({name:`c${i}`,value:'x'.repeat(200),domain:'leghe.fantacalcio.it'}))});
  assert.ok(state.length>20000);
  assert.equal(open(seal(state,publicKey),privateKey),state);

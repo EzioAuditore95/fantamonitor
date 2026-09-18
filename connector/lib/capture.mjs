@@ -21,8 +21,8 @@ async function submitLogin(page,account){
   await Promise.race([page.waitForURL(u=>!/\/login(?:\/|$)/i.test(new URL(u).pathname),{timeout:15000}),page.waitForTimeout(3000)]);
   await page.waitForLoadState('networkidle',{timeout:10000}).catch(()=>{});
 }
-// Prima si prova con la sessione salvata; il login completo è il fallback, non la regola.
-// Non ci si fida del solo TTL: Fantacalcio può invalidare la sessione in qualsiasi momento.
+// The stored session is tried first; a full login is the fallback, not the rule.
+// The TTL alone is not trusted: Fantacalcio can invalidate a session at any moment.
 async function reachAuthenticated(page,league,target,creds){
   await page.goto(target,{waitUntil:'networkidle',timeout:30000});
   if(!await atLoginWall(page))return {relogged:false};
@@ -65,7 +65,7 @@ async function gather(league,round){
       for(const [k,v] of Object.entries(captured)){const l=k.toLowerCase();
         if(!k.startsWith(':')&&!['host','content-length','connection','accept-encoding'].includes(l)&&!l.startsWith('sec-fetch-'))headers[k]=v;}
       if(relogged)await persistSession(league,context);
-      // Persistere l'id squadra toglie un punto di rottura: oggi si riscopre a ogni cattura.
+      // Persisting the team id removes a failure mode: it is otherwise rediscovered every capture.
       await rpc('fm_store_league_team_ids',withKey({league:league.id,mapping:Object.fromEntries(roster.map(t=>[t.name,t.id]))})).catch(()=>{});
       return {roster,headers};
     }finally{page.off('response',listener);}
@@ -90,7 +90,7 @@ export async function capture(league,round){
   return snapshot;
 }
 
-// Login soltanto, nessuna cattura: è quello che serve al pulsante "Verifica connessione".
+// Login only, no capture: this is what the "check connection" button needs.
 export async function checkCredentials(league){
   try{
     const creds=await credentialsFor(league);
@@ -109,8 +109,8 @@ export async function checkCredentials(league){
   }
 }
 
-// Cache per lega, non più una singola: con più leghe una cache globale servirebbe i dati
-// della lega sbagliata. Era il motivo per cui il monkey-patch di phase2 non poteva scalare.
+// Cached per league rather than once: with several leagues a global cache would serve the
+// wrong league's data. That is precisely why the phase2 monkey-patch could not scale.
 const competitionCache=new Map();
 const COMPETITION_TTL=60_000;
 export async function captureCompetition(league){

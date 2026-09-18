@@ -2,8 +2,8 @@ import { chromium } from 'playwright';
 import { maxBrowserContexts } from './config.mjs';
 import { createKeyedMutex,createLimiter } from './concurrency.mjs';
 
-// Un solo browser per processo, riusato. Prima se ne lanciava uno nuovo a ogni operazione,
-// e un auto-sync ne faceva due: con N leghe e 5 checkpoint diventava insostenibile.
+// One browser per process, reused. It used to launch a new one per operation, and an
+// auto-sync did that twice: with N leagues and 5 checkpoints that stopped being viable.
 let launching=null;
 async function browser(){
   if(!launching)launching=chromium.launch({headless:true}).catch(e=>{launching=null;throw e;});
@@ -12,8 +12,8 @@ async function browser(){
 const limiter=createLimiter(maxBrowserContexts);
 const perLeague=createKeyedMutex();
 
-// Mutex per lega: due richieste sulla stessa lega non devono fare due login.
-// Limite globale: la memoria del container è il vincolo, non la CPU.
+// Per-league mutex: two requests on the same league must not trigger two logins.
+// Global cap: container memory is the constraint here, not CPU.
 export function withLeagueContext(leagueId,storageState,fn){
   return perLeague.run(leagueId,()=>limiter.run(async()=>{
     const instance=await browser();

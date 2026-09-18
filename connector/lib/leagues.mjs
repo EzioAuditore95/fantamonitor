@@ -12,7 +12,7 @@ export async function loadLeagues({force=false}={}){
 }
 export const forgetLeagues=()=>{cache={at:0,leagues:[]};};
 
-// Puro apposta: è il punto in cui un messaggio può finire nel canale sbagliato.
+// Pure on purpose: this is where a message could end up in the wrong channel.
 export function leagueForChat(chatId,leagues){
   if(chatId==null)return null;
   const wanted=String(chatId);
@@ -20,8 +20,8 @@ export function leagueForChat(chatId,leagues){
 }
 export function leagueBySlug(slug,leagues){return leagues.find(l=>l.slug===slug)??null;}
 
-// Non fidarsi del solo TTL: Fantacalcio può invalidare la sessione in qualsiasi momento,
-// quindi questa è una scorciatoia, non una garanzia — il fallback è sempre il login.
+// Do not trust the TTL alone: Fantacalcio can invalidate a session at any moment, so this
+// is a shortcut, not a guarantee — the fallback is always a full login.
 export function shouldReuseSession(record,now=Date.now(),ttlMs=sessionTtlMs){
   if(!record?.sessionState)return false;
   if(record.sessionExpiresAt&&Date.parse(record.sessionExpiresAt)<=now)return false;

@@ -1,7 +1,7 @@
 import { createClient } from './supabase/server';
 import {snapshotSchemaFor,normalize,canonical,type Snapshot} from './model';
 import type { LeagueConfig } from './league.ts';
-// Il filtro esplicito raddoppia la RLS e soprattutto evita di scaricare le altre leghe.
+// The explicit filter backs up RLS and, above all, avoids downloading other leagues.
 export async function listSnapshots(cfg:LeagueConfig):Promise<Snapshot[]>{
  const client=await createClient();const rows:Snapshot[]=[];const schema=snapshotSchemaFor(cfg);
  for(let offset=0;;offset+=500){const {data,error}=await client.from('fm_observations').select('body').eq('league_id',cfg.id).order('observed_at').order('id').range(offset,offset+499);if(error)throw new Error('Archive unavailable');

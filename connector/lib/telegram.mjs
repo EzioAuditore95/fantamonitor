@@ -1,8 +1,8 @@
 import { appUrl,telegramBotToken } from './config.mjs';
 import { rpc,withKey } from './rpc.mjs';
 
-// Un bot solo serve N leghe: il suo webhook riceve gli update di tutte le chat in cui si
-// trova, quindi basta mappare chat_id → lega. Qui i testi restano puri e testabili.
+// A single bot serves N leagues: its webhook receives updates from every chat it belongs
+// to, so mapping chat_id → league is enough. The texts stay pure and testable here.
 export function checkpointCopy(checkpoint){return ({'T-24h':'Promemoria iniziale: manca ancora tempo, ma queste squadre non risultano aver inserito la formazione.','T-12h':'Promemoria: queste squadre risultano ancora senza formazione.','T-1h':'Manca 1 ora: controllare le squadre ancora senza formazione.','T-15m':'Ultimo avviso: mancano 15 minuti alla scadenza.','T+5m':'Scadenza superata: situazione finale rilevata.'})[checkpoint]||'Stato aggiornato.';}
 export function buildTelegramMessage(snapshot,checkpoint='LIVE'){
   const missing=snapshot.teams.filter(t=>!t.present).map(t=>t.name);const summary=`Formazioni inserite: ${snapshot.inserted}/${snapshot.expected_total}`;const lines=[`FANTAMONITOR — Giornata ${snapshot.round}`,checkpoint==='LIVE'?'Aggiornamento manuale':checkpointCopy(checkpoint),summary,''];

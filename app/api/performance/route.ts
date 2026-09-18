@@ -12,8 +12,7 @@ function fingerprint(){return createHash('sha256').update(secret()).digest('hex'
 async function archivedFallback(cfg:LeagueConfig){try{const snapshots=await listSnapshots(cfg);const last=[...snapshots].reverse().find(s=>s.competition)?.competition;if(!last)return null;return {...last,warnings:[...last.warnings,'Dati mostrati dall’ultimo snapshot archiviato: aggiornamento live non disponibile.']};}catch{return null;}}
 
 export async function GET(request:Request){
-  // Senza questo controllo un membro della lega A potrebbe far partire una cattura
-  // Playwright sulla lega B.
+  // Without this check a member of league A could start a Playwright capture on league B.
   const ctx=await requireLeagueMember(new URL(request.url).searchParams.get('league'));
   if(ctx instanceof Response)return ctx;
   const {cfg}=ctx;

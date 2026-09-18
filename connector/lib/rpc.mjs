@@ -9,5 +9,5 @@ export async function rpc(name,args){
   if(!text)return null;
   try{return JSON.parse(text);}catch{return text;}
 }
-// L'access_key è lo stesso per tutte le leghe: autentica il connettore, non la lega.
+// The access key is the same for every league: it authenticates the connector, not the league.
 export const withKey=args=>({access_key:autoSyncSecret,...args});

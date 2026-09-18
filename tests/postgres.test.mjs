@@ -47,9 +47,9 @@ async function loadLeague(id){
 }
 const cfgAlpha=await loadLeague(ALPHA),cfgBeta=await loadLeague(BETA);
 
-// Tutto il percorso di auto-sync è dietro fm_auto_sync_authorized, e la chiave in chiaro
-// esiste solo su Railway. Si registra che la funzione vera rifiuta, poi la si sostituisce
-// con una chiave nota per poter esercitare la logica che sta dietro il cancello.
+// The whole auto-sync path sits behind fm_auto_sync_authorized, and the plaintext key only
+// exists on Railway. Record that the real function rejects, then replace it with a known
+// key so the logic behind the gate can be exercised at all.
 const realAuthRejectsWrongKey=(await db.query("select public.fm_auto_sync_authorized('chiave-sbagliata') as ok")).rows[0].ok;
 const realAuthRejectsEmpty=(await db.query("select public.fm_auto_sync_authorized('') as ok")).rows[0].ok;
 const BOT_KEY='chiave-di-test';
@@ -175,8 +175,8 @@ test('TypeScript and SQL read the league contract from the same row',async()=>{
   [JSON.stringify([{id:'d'.repeat(64),body:{...betaBody,expected_total:10,teams:observation.body.teams,inserted:observation.body.inserted}}])]),/invalid_scope/);
 });
 
-// La preset in lib/league.ts è ora solo una fixture: se si scosta dalla riga seedata,
-// i test di dominio misurerebbero una lega che non esiste.
+// The preset in lib/league.ts is now just a fixture: if it drifts from the seeded row, the
+// domain tests would be measuring a league that does not exist.
 test('the TypeScript preset still matches the seeded league row',()=>{
  for(const key of ['id','slug','name','season','competitionId','roundCount','serieAOffset','freeTokens','penaltyAmount','teamCount'])
   assert.deepEqual(cfgAlpha[key],CHEFANTAVITAE10[key],key);
@@ -242,13 +242,13 @@ test('the single-league bridge refuses to guess while two leagues are active',as
 const SEALED='v1.'+'a'.repeat(40)+'.'+'b'.repeat(16)+'.'+'c'.repeat(22)+'.'+'d'.repeat(30);
 const setCredsSql='select fm_set_league_credentials($1::uuid,$2,$3,$4::int,$5::timestamptz) as result';
 const statusSql='select fm_league_credential_status($1::uuid) as status';
-// Il divieto di rilettura in chiaro è imposto dal database, non dalle route: non esiste
-// alcuna policy e nessun grant, quindi non c'è nulla da leggere nemmeno sbagliando una route.
+// The ban on reading the ciphertext back is enforced by the database, not by the routes:
+// there is no policy and no grant, so a badly written route still finds nothing to read.
 test('the ciphertext is unreadable to every logged-in user, admins included',async()=>{
  for(const who of [alphaAdmin,alphaViewer,betaAdmin,bothUser])
   await assert.rejects(asUser(who,'select * from fm_league_credentials'),/permission denied/,who);
  await assert.rejects(asUser(alphaAdmin,'select payload from fm_league_credentials where league_id=$1',[ALPHA]),/permission denied/);
- // Anche la funzione di lettura del connettore è fuori portata per una sessione utente.
+ // The connector's read function is out of reach for a user session too.
  await assert.rejects(asUser(alphaAdmin,'select fm_league_credentials_for_bot($1,$2::uuid)',['qualsiasi',ALPHA]),/permission denied/);
  await assert.rejects(db.query('select fm_league_credentials_for_bot($1,$2::uuid)',['chiave-sbagliata',ALPHA]),/unauthorized/);
 });
@@ -256,7 +256,7 @@ test('only the admin of that league can store its credentials',async()=>{
  await assert.rejects(asUser(alphaViewer,setCredsSql,[ALPHA,'password',SEALED,1,null]),/admin_required/);
  await assert.rejects(asUser(betaAdmin,setCredsSql,[ALPHA,'password',SEALED,1,null]),/admin_required/);
  await assert.rejects(asUser(stranger,setCredsSql,[ALPHA,'password',SEALED,1,null]),/admin_required/);
- // bothUser è viewer su beta: può su alpha, non su beta.
+ // bothUser is a viewer on beta: allowed on alpha, refused on beta.
  await assert.rejects(asUser(bothUser,setCredsSql,[BETA,'password',SEALED,1,null]),/admin_required/);
  assert.deepEqual((await asUser(bothUser,setCredsSql,[ALPHA,'password',SEALED,1,null])).rows[0].result,{saved:true});
 });
@@ -279,7 +279,7 @@ test('storing a session leaves the password alone and resets the verification',a
  const status=(await asUser(alphaAdmin,statusSql,[ALPHA])).rows[0].status;
  assert.equal(status.configured,true,'la password resta');
  assert.equal(status.hasSession,true);
- // Un segreto nuovo invalida la verifica del precedente.
+ // A new secret invalidates whatever the previous one was verified as.
  assert.equal(status.lastVerifiedAt,null);
  assert.equal(status.lastVerifiedStatus,null);
 });
@@ -298,13 +298,13 @@ test('the connector directory lists active leagues with their rosters',async()=>
  assert.equal(beta.teams.length,8);
  assert.equal(beta.roundCount,30);
  await assert.rejects(bot('select fm_leagues_for_bot($1)',['chiave-sbagliata']),/unauthorized/);
- // Una lega disattivata sparisce dalla directory: il connettore smette di servirla.
+ // A deactivated league disappears from the directory: the connector stops serving it.
  await db.query('update fm_leagues set active=false where id=$1',[BETA]);
  assert.equal((await bot('select fm_leagues_for_bot($1) as l',[BOT_KEY])).rows[0].l.length,1);
  await db.query('update fm_leagues set active=true where id=$1',[BETA]);
 });
 test('two leagues are claimed independently and never twice',async()=>{
- // Calendario deterministico: il checkpoint T-1h di ciascuna lega è dovuto adesso.
+ // Deterministic schedule: the T-1h checkpoint of each league is due right now.
  await db.query('update fm_round_schedule set start_at=null');
  await db.query("update fm_leagues set auto_sync_enabled=true where id=$1",[BETA]);
  for(const league of [ALPHA,BETA])
@@ -317,7 +317,7 @@ test('two leagues are claimed independently and never twice',async()=>{
  assert.notEqual(first.league_id,second.league_id,'un claim su una lega non blocca l’altra');
  for(const claim of [first,second]){assert.equal(claim.round,5);assert.equal(claim.checkpoint,'T-1h');}
  assert.equal((await db.query("select count(*)::int as n from fm_auto_sync_runs where round=5 and checkpoint='T-1h'")).rows[0].n,2);
- // Una lega con auto-sync spento non viene mai pianificata.
+ // A league with auto-sync switched off is never scheduled.
  await db.query('delete from fm_auto_sync_runs where round=5');
  await db.query('update fm_leagues set auto_sync_enabled=false where id=$1',[BETA]);
  const onlyAlpha=(await bot('select fm_claim_due_auto_sync($1) as c',[BOT_KEY])).rows[0].c;
@@ -331,7 +331,7 @@ test('completing a checkpoint writes into the league the body names',async()=>{
  assert.ok(claim);
  const stamp=new Date().toISOString();
  const foreign=claim.league_id===ALPHA?betaBodyAt(5,stamp):alphaBody(5,stamp);
- // Il corpo di un'altra lega non trova il claim: lo scope è il corpo stesso.
+ // Another league's body finds no claim: the scope is the body itself.
  await assert.rejects(bot('select fm_complete_auto_sync($1,5,$2,$3::jsonb)',[BOT_KEY,claim.checkpoint,JSON.stringify(foreign)]),/claim_required/);
  const body=bodyForLeague(claim.league_id,5,stamp);
  const result=(await bot('select fm_complete_auto_sync($1,5,$2,$3::jsonb) as r',[BOT_KEY,claim.checkpoint,JSON.stringify(body)])).rows[0].r;
@@ -342,7 +342,7 @@ test('completing a checkpoint writes into the league the body names',async()=>{
  const run=(await db.query("select status,observation_id from fm_auto_sync_runs where league_id=$1 and round=5 and checkpoint=$2",[claim.league_id,claim.checkpoint])).rows[0];
  assert.equal(run.status,'success');
  assert.ok(run.observation_id);
- // Un corpo fuori finestra temporale non passa.
+ // A body outside the time window does not get through.
  await db.query('delete from fm_auto_sync_runs where round=5');
  const stale=(await bot('select fm_claim_due_auto_sync($1) as c',[BOT_KEY])).rows[0].c;
  const old=new Date(Date.now()-30*60*1000).toISOString();
@@ -360,10 +360,10 @@ test('a failed checkpoint is recorded and retried, then given up',async()=>{
   assert.equal(run.attempt_count,attempt);
   assert.equal(run.error,`errore ${attempt}`);
  }
- // Dopo tre tentativi il checkpoint non viene più ripreso: niente ciclo infinito.
+ // After three attempts the checkpoint is no longer picked up: no infinite retry loop.
  assert.equal((await bot('select fm_claim_due_auto_sync($1) as c',[BOT_KEY])).rows[0].c,null);
- // Il ponte a 4 argomenti, che il connettore vecchio usa ancora, non deve mai lasciare un
- // run in 'running': sarebbe irrecuperabile, perché il claim riprende solo i 'failed'.
+ // The four-argument bridge, still used by the old connector, must never leave a run in
+ // 'running': that would be unrecoverable, since the claim only picks up 'failed' ones.
  await db.query('delete from fm_auto_sync_runs where round=5');
  const stuck=(await bot('select fm_claim_due_auto_sync($1) as c',[BOT_KEY])).rows[0].c;
  await bot('select fm_fail_auto_sync($1,5,$2,$3)',[BOT_KEY,stuck.checkpoint,'vecchio connettore']);
@@ -376,11 +376,11 @@ test('the bot importer derives its league from the body, like the admin one',asy
  assert.equal(result.ok,true);
  assert.equal(result.inserted,1);
  assert.equal((await db.query('select league_id from fm_observations where round=9 and observed_at=$1',[stamp])).rows[0].league_id,BETA);
- // Idempotente: lo stesso corpo non duplica.
+ // Idempotent: the same body does not duplicate.
  assert.equal((await bot('select fm_bot_import_snapshot($1,$2::jsonb) as r',[BOT_KEY,JSON.stringify(betaBodyAt(9,stamp))])).rows[0].r.inserted,0);
- // Uno slug che non risolve a nessuna lega attiva non entra da nessuna parte.
+ // A slug that resolves to no active league gets in nowhere.
  await assert.rejects(bot('select fm_bot_import_snapshot($1,$2::jsonb)',[BOT_KEY,JSON.stringify({...betaBodyAt(9,stamp),league:'lega-fantasma'})]),/invalid_snapshot/);
- // Giornata 31 non esiste per beta, pur esistendo per alpha.
+ // Round 31 does not exist for beta, even though it does for alpha.
  await assert.rejects(bot('select fm_bot_import_snapshot($1,$2::jsonb)',[BOT_KEY,JSON.stringify(betaBodyAt(31,stamp))]),/invalid_snapshot_time/);
 });
 test('the bot round and telegram RPCs refuse to guess between two leagues',async()=>{
@@ -397,7 +397,7 @@ test('the bot round and telegram RPCs refuse to guess between two leagues',async
   assert.equal(state.message_id,42);
   assert.equal(state.chat_id,'-100111');
   assert.equal((await db.query('select league_id from fm_telegram_messages where round=5')).rows[0].league_id,ALPHA);
-  // Un secondo upsert aggiorna invece di duplicare.
+  // A second upsert updates instead of duplicating.
   await bot("select fm_upsert_telegram_message($1,5,'-100111',43,'T-15m')",[BOT_KEY]);
   assert.equal((await db.query('select count(*)::int as n from fm_telegram_messages where round=5')).rows[0].n,1);
   assert.equal((await bot('select fm_get_telegram_message($1,5) as m',[BOT_KEY])).rows[0].m.message_id,43);
@@ -413,7 +413,7 @@ test('the connector can store a session and team ids for one league only',async(
  await bot('select fm_record_credential_check($1,$2::uuid,$3)',[BOT_KEY,BETA,'auth_failed']);
  assert.equal((await asUser(betaViewer,statusSql,[BETA])).rows[0].status.lastVerifiedStatus,'auth_failed');
  await assert.rejects(bot('select fm_record_credential_check($1,$2::uuid,$3)',[BOT_KEY,BETA,'boh']),/invalid_credential_outcome/);
- // Gli id squadra si scrivono solo nella lega indicata, anche a parità di nome.
+ // Team ids are written only into the named league, even for identical names.
  await bot('select fm_store_league_team_ids($1,$2::uuid,$3::jsonb)',[BOT_KEY,BETA,JSON.stringify({'Beta 1':555,'Beta 2':556})]);
  const ids=(await db.query('select name,fantacalcio_team_id from fm_league_teams where league_id=$1 order by position',[BETA])).rows;
  assert.equal(ids[0].fantacalcio_team_id,555);

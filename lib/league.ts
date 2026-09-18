@@ -1,8 +1,8 @@
 export type LeagueTeam={name:string;position:number;color:string;fantacalcioTeamId?:number};
 export type LeaguePeriod={key:string;label:string;rounds:number[]};
 export type LeaguePeriodMode='half'|'season';
-// Sorgente della configurazione: rispecchia una riga di fm_leagues. La config derivata
-// si ottiene con makeLeagueConfig e non va costruita a mano.
+// Source shape of a league: mirrors one fm_leagues row. The derived config comes from
+// makeLeagueConfig and is never assembled by hand.
 export type LeagueDefinition={
   id:string;slug:string;name:string;season:string;competitionId:string;
   teams:LeagueTeam[];roundCount:number;serieAOffset:number;
@@ -52,8 +52,8 @@ export function periodForRound(cfg:LeagueConfig,round:number):LeaguePeriod{
   if(!period)throw new Error('Giornata di lega non valida.');
   return period;
 }
-// Nessun colore configurato non deve produrre un crest trasparente: il fallback è
-// deterministico sul nome, così una lega senza palette resta leggibile.
+// A missing colour must not yield an invisible crest: the fallback is derived from the
+// name, so a league with no palette stays readable.
 export function teamColor(cfg:LeagueConfig,name:string):string{
   const team=cfg.teams.find(t=>t.name===name);
   if(team?.color)return team.color;
@@ -61,8 +61,8 @@ export function teamColor(cfg:LeagueConfig,name:string):string{
   return `hsl(${Math.abs(hash)%360} 62% 78%)`;
 }
 
-// Mappatura riga → config: la usano sia i test su PGlite sia l'app su Supabase, così
-// TypeScript e SQL leggono la stessa riga invece di tenere due copie del contratto.
+// Row → config mapping, shared by the PGlite tests and the Supabase app, so TypeScript
+// and SQL read the same row instead of keeping two copies of the contract.
 export type LeagueRow={id:string;slug:string;name:string;season:string;competition_id:string;
   round_count:number;serie_a_offset:number;period_mode:LeaguePeriodMode;first_half_end:number|null;
   free_tokens:number;penalty_amount:number;rules:Record<string,unknown>|null;updated_at:string|Date};

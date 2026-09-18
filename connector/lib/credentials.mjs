@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { credentialPrivateKey } from './config.mjs';
-// Gemello di lib/credentials.ts sul lato app: stesso formato, direzione opposta.
-// Qui vive la chiave PRIVATA, e solo qui. Formato: v1.<rsa(chiave)>.<iv>.<tag>.<dati>
+// Twin of lib/credentials.ts on the app side: same format, opposite direction.
+// The PRIVATE key lives here, and only here. Layout: v1.<rsa(key)>.<iv>.<tag>.<data>
 const VERSION='v1';
 const unb64=s=>Buffer.from(s,'base64url');
 function pem(value){const text=value.includes('-----BEGIN')?value:Buffer.from(value,'base64').toString('utf8');return text.trim();}
@@ -22,7 +22,7 @@ export function seal(plaintext,publicKeyOrPrivate=credentialPrivateKey){
   const key=crypto.randomBytes(32),iv=crypto.randomBytes(12);
   const cipher=crypto.createCipheriv('aes-256-gcm',key,iv);
   const body=Buffer.concat([cipher.update(plaintext,'utf8'),cipher.final()]);
-  // Dalla chiave privata si ricava la pubblica: il connettore risigilla per sé stesso.
+  // The public key is derived from the private one: the connector reseals for itself.
   const pub=crypto.createPublicKey(pem(publicKeyOrPrivate));
   const sealedKey=crypto.publicEncrypt({key:pub,padding:crypto.constants.RSA_PKCS1_OAEP_PADDING,oaepHash:'sha256'},key);
   const b64=b=>b.toString('base64url');

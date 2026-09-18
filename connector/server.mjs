@@ -51,8 +51,8 @@ function chatIdOf(update){
   return update.callback_query?.message?.chat?.id ?? update.message?.chat?.id ?? update.channel_post?.chat?.id ?? null;
 }
 async function handleTelegramUpdate(update){
-  // Una chat sconosciuta viene ignorata: è il punto in cui un messaggio potrebbe finire
-  // nel canale di un'altra lega, il fallimento peggiore possibile per questo prodotto.
+  // An unknown chat is ignored: this is where a message could land in another league's
+  // channel, the worst failure this product can have.
   const league=leagueForChat(chatIdOf(update),await loadLeagues());
   if(!league)return;
   const callback=update.callback_query;
@@ -90,7 +90,7 @@ async function configureTelegramWebhook(){
     {command:'stats',description:'Apri le statistiche'},{command:'help',description:'Mostra i comandi'}]});
 }
 
-// Il claim ora porta con sé la lega: due leghe possono avere checkpoint simultanei.
+// The claim now carries its league: two leagues can have simultaneous checkpoints.
 async function runAutoSync(){
   const claim=await rpc('fm_claim_due_auto_sync',withKey({}));
   if(!claim)return {status:'no_due_checkpoint'};

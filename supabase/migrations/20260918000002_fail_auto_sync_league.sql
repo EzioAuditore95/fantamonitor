@@ -14,7 +14,7 @@ $$;
 revoke all on function public.fm_fail_auto_sync(text,uuid,integer,text,text) from public,authenticated;
 grant execute on function public.fm_fail_auto_sync(text,uuid,integer,text,text) to anon,service_role;
 
--- Il ponte a quattro argomenti resta finché il connettore vecchio è in produzione.
+-- The four-argument bridge stays while the old connector is still in production.
 create or replace function public.fm_fail_auto_sync(access_key text,day integer,checkpoint_name text,error_text text) returns void
 language plpgsql security definer set search_path='' as $$
 declare target uuid;
@@ -22,8 +22,8 @@ begin
  if not public.fm_auto_sync_authorized(access_key) then raise exception 'unauthorized' using errcode='42501'; end if;
  target:=public.fm_default_league();
  if target is null then
-  -- Senza una lega certa si marca comunque il run come fallito: lasciarlo 'running'
-  -- lo renderebbe irrecuperabile, mentre 'failed' è ripetibile fino a tre tentativi.
+  -- With no certain league the run is still marked failed: leaving it 'running' would make
+  -- it unrecoverable, while 'failed' is retried up to three times.
   update public.fm_auto_sync_runs set status='failed',executed_at=now(),error=left(coalesce(error_text,'unknown'),500)
   where round=day and checkpoint=checkpoint_name and status='running';
   return;

@@ -159,6 +159,9 @@ Altre regole ferme:
 - **Italiano per l'utente, inglese per il codice**: identificatori, chiavi di log e
   commenti in inglese; label, testi UI e messaggi d'errore in italiano (apostrofo
   tipografico `’`). Date e valute con `Intl.*` e `timeZone: 'Europe/Rome'`.
+  **Unica eccezione**: `supabase/seeds/new-league.sql` ha i commenti in italiano perché è un
+  modulo da compilare a mano, letto insieme al runbook italiano in `deploy/README.md`. È una
+  scelta, non una dimenticanza: non "correggerla".
 - **Commenti rari**, solo per spiegare un vincolo non deducibile (una riga sopra il codice).
 - **Validazione ai bordi**: ogni input esterno passa da uno schema Zod `.strict()`.
   Le funzioni in `performance.ts` / `lineup-analytics.ts` restano pure.

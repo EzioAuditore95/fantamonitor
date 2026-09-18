@@ -1,5 +1,5 @@
-// Forma dello snapshot e URL della lega. Deliberatamente senza Playwright: è la parte
-// che i test possono esercitare senza un browser.
+// Snapshot shape and league URLs. Deliberately free of Playwright: this is the part the
+// tests can exercise without a browser.
 import { extractFormation,metaNumber,metaString,metaUrl } from './fantacalcio.mjs';
 
 const ORIGIN='https://leghe.fantacalcio.it';
@@ -26,7 +26,7 @@ export function toTeamStatus(item,round){
   return result;
 }
 
-// Lo snapshot prende scope, squadre e URL dalla config della lega, mai da costanti.
+// The snapshot takes its scope, teams and URLs from the league config, never from constants.
 export function snapshotFor(league,round,teamsData,observedAt=new Date().toISOString()){
   return {schema_version:1,league:league.slug,season:league.season,competition_id:league.competitionId,
     round,observed_at:observedAt,source:'authenticated_ui',source_url:manageLineupsUrl(league,round),
@@ -34,7 +34,7 @@ export function snapshotFor(league,round,teamsData,observedAt=new Date().toISOSt
 }
 
 
-// --- competizione (da phase2-patch.mjs) -------------------------------------
+// --- competition (from phase2-patch.mjs) ------------------------------------
 export function score(result){if(typeof result!=='string')return null;const m=result.match(/(\d+)\s*[-:]\s*(\d+)/);return m?{home:Number(m[1]),away:Number(m[2])}:null;}
 export function standingRows(teamNames,calendar,idToName){
   const rows=new Map(teamNames.map(name=>[name,{name,played:0,wins:0,draws:0,losses:0,goalsFor:0,goalsAgainst:0,points:0,fantasyTotal:0}]));
