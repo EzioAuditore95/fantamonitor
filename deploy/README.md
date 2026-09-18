@@ -209,6 +209,89 @@ Nei log non compaiono mai il testo in chiaro né lo `storageState`: solo
 `credential_sealed {league, mode, usernameFingerprint}`, con il fingerprint a 12 esadecimali,
 la stessa convenzione di `secretFingerprint` in `lib/sync.ts`.
 
+## Passaggio al multi-lega
+
+Le sei migrazioni dopo `202609110001` portano lo schema da una lega cablata a N leghe.
+**L'ordine conta**, e un passaggio fuori sequenza lascia il sistema a metà.
+
+| # | Migrazione | Cosa fa |
+|---|---|---|
+| 1 | `20260916134143_reconcile_bot_rpcs` | trascrive in repo le RPC del bot create a mano in produzione |
+| 2 | `20260917000001_multi_league` | `fm_leagues`, `league_id` ovunque, RLS per lega, RPC parametriche |
+| 3 | `20260917000002_league_credentials` | credenziali cifrate per lega |
+| 4 | `20260918000001_connector_league_directory` | directory delle leghe per il connettore |
+| 5 | `20260918000002_fail_auto_sync_league` | `fm_fail_auto_sync` con la lega esplicita |
+
+La numero 2 è quella che tocca dati veri: riscrive vincoli di unicità, chiavi primarie e
+policy. Comincia con un blocco di asserzioni che **interrompe tutto** se in
+`fm_observations`, `fm_lineup_reviews` o `fm_source_events` esiste una riga che non
+appartiene a `chefantavitae10`: se si ferma lì, non è un difetto della migrazione, è un dato
+inatteso da guardare prima di proseguire. Fare un backup prima resta la regola.
+
+### Sequenza di rilascio
+
+1. **Migrazioni** nell'ordine sopra. La lega esistente viene seedata dalla migrazione 2 con
+   `auto_sync_enabled = true`, quindi l'auto-sync continua a comportarsi come prima.
+2. **Popolare i canali Telegram** della lega esistente, *prima* di ridistribuire il
+   connettore: ora vivono in `fm_leagues`, non più nelle variabili Railway.
+   ```sql
+   update public.fm_leagues set telegram_chat_id='…', telegram_thread_id='…',
+          telegram_admin_chat_id='…' where slug='chefantavitae10';
+   ```
+   Saltare questo passo non rompe la sincronizzazione, ma zittisce Telegram.
+3. **Generare la coppia di chiavi** (vedi sopra) e impostare `FM_CREDENTIAL_PUBLIC_KEY`
+   sulla web app, `FM_CREDENTIAL_PRIVATE_KEY` sul connettore.
+4. **Ridistribuire la web app.** Gli URL passano da `/` a `/l/{slug}`; `/` reindirizza, quindi
+   i segnalibri continuano a funzionare.
+5. **Ridistribuire il connettore** e poi rimuovere da Railway `FANTACALCIO_USERNAME`,
+   `FANTACALCIO_PASSWORD`, `TELEGRAM_CHAT_ID`, `TELEGRAM_THREAD_ID` e
+   `TELEGRAM_ADMIN_CHAT_ID`: non vengono più lette.
+6. **Eliminare i servizi cron e scheduler** su Railway: le loro immagini non esistono più
+   nel repo. Il claim si invoca con `POST /auto-sync`.
+7. **Ricollegare l'account Fantacalcio** dal dialog nel banner, poi premere
+   *Verifica connessione*. Finché non lo si fa, ogni cattura fallisce con
+   `connector_credentials_missing` — è il prezzo di non custodire più una password in chiaro
+   in una variabile d'ambiente.
+
+## Aggiungere una lega
+
+1. Invita i partecipanti su Supabase Auth: il seed si ferma se un'email non esiste ancora.
+2. Copia [`supabase/seeds/new-league.sql`](../supabase/seeds/new-league.sql), modifica il
+   blocco `parametri` in cima ed eseguilo. Crea lega, squadre, calendario e membership in
+   una transazione, e rifiuta di procedere se la lega esiste già, se le squadre sono meno di
+   due o in numero dispari, o se un'email non è registrata.
+3. L'amministratore della nuova lega collega il proprio account dal dialog e verifica.
+4. Una sincronizzazione manuale dalla dashboard sulla giornata corrente.
+5. Solo dopo che la cattura è riuscita: `update public.fm_leagues set auto_sync_enabled=true
+   where slug='…';` e, se serve, popola gli orari in `fm_round_schedule`.
+
+### Verifica di accettazione
+
+Il vero collaudo del multi-lega è la seconda lega. Da controllare:
+
+- [ ] `/l/{slug}` della nuova lega mostra il suo nome, il suo numero di squadre e il suo
+      selettore di giornate; il banner mostra lo switcher solo a chi appartiene a più leghe.
+- [ ] Il calcolo di gettoni e penalità usa i parametri della nuova lega, non quelli dell'altra.
+- [ ] `/api/archive?league={slug}` non restituisce **nemmeno una riga** dell'altra lega, e
+      risponde 404 a un membro che non vi appartiene.
+- [ ] Il countdown usa il calendario della lega giusta.
+- [ ] Il messaggio Telegram arriva nel canale di quella lega, e un comando inviato da una
+      chat sconosciuta viene ignorato.
+- [ ] Due checkpoint simultanei su leghe diverse non si bloccano a vicenda.
+
+Controllo di isolamento, da eseguire come `service_role`:
+
+```sql
+select l.slug, count(o.id) as osservazioni, count(distinct o.round) as giornate
+from public.fm_leagues l left join public.fm_observations o on o.league_id=l.id
+group by l.slug order by l.slug;
+
+-- Deve restituire zero righe: nessuna osservazione il cui corpo contraddica la propria lega.
+select o.id, l.slug, o.body->>'league' as body_league
+from public.fm_observations o join public.fm_leagues l on l.id=o.league_id
+where o.body->>'league' is distinct from l.slug;
+```
+
 ## Verifiche
 
 ```sh

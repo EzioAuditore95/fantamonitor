@@ -79,6 +79,9 @@ Browser ──► Next.js App Router (app/)
 - **`supabase/migrations/`** — sorgente di verità dello schema. Le RPC leggono i limiti da
   `fm_leagues` e replicano in SQL la validazione fatta in Zod; `lib/league.ts` legge la
   stessa riga tramite `leagueConfigFromRows`.
+- **`supabase/seeds/`** — `new-league.sql` aggiunge una lega con squadre, calendario e
+  membership. **Le leghe si creano da qui, non da una schermata**: lo schema è multi-tenant,
+  la UI no. Le credenziali non passano mai da SQL: le collega l'admin dal dialog.
 - **`connector/`** — servizio Node separato (deploy Railway) che fa login su Fantacalcio
   con Playwright, cattura formazioni e competizione, notifica su Telegram ed esegue
   l'auto-sync a checkpoint. Ha un proprio `package.json`; non fa parte della build Next.
