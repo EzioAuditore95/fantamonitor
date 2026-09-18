@@ -229,9 +229,14 @@ superato — la storia git li conserva, il repo no.
   query. La forma `fm_is_member(league_id)` dentro una policy sarebbe invece una sotto-query
   correlata, valutata per riga.
 - `fm_default_league()` è un ponte temporaneo: risolve l'unica lega attiva e restituisce
-  `null` (quindi `league_required`) appena ce ne sono due. Lo usano le RPC che il connettore
-  chiama ancora con la firma originale e lo shim a 2 argomenti di `fm_save_review`. Va
-  rimosso quando il connettore passerà la lega esplicitamente.
+  `null` (quindi `league_required`) appena ce ne sono due. Lo usano le RPC del bot chiamate
+  senza lega e lo shim a 2 argomenti di `fm_save_review`. Va rimosso quando nessun chiamante
+  userà più le firme vecchie.
+- **`fm_fail_auto_sync` è l'eccezione al ponte, e per un buon motivo.** Se non riesce a
+  risolvere la lega marca comunque il run come `failed`: lasciarlo `running` lo renderebbe
+  irrecuperabile, perché `fm_claim_due_auto_sync` riprende soltanto i run `failed`, e quel
+  round/checkpoint resterebbe bloccato per sempre. La firma a 5 argomenti con la lega è
+  quella giusta, e il connettore la usa passando `claim.league_id`.
 - Dentro `lib/` gli import **di valore** fra moduli usano l'estensione `.ts` esplicita
   (`from './league.ts'`): `node --experimental-strip-types` gira in ESM e non riscrive le
   estensioni, quindi senza di essa i test falliscono con `ERR_MODULE_NOT_FOUND`. Da qui

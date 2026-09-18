@@ -97,7 +97,7 @@ async function runAutoSync(){
   const leagues=await loadLeagues({force:true});
   const league=leagues.find(l=>l.id===claim.league_id);
   const round=Number(claim.round),checkpoint=String(claim.checkpoint);
-  if(!league){await rpc('fm_fail_auto_sync',withKey({day:round,checkpoint_name:checkpoint,error_text:'unknown_league'})).catch(()=>{});return {status:'unknown_league'};}
+  if(!league){await rpc('fm_fail_auto_sync',withKey({league:claim.league_id,day:round,checkpoint_name:checkpoint,error_text:'unknown_league'})).catch(()=>{});return {status:'unknown_league'};}
   try{
     const snapshot=await capture(league,round);
     const result=await rpc('fm_complete_auto_sync',withKey({day:round,checkpoint_name:checkpoint,sample:snapshot}));
@@ -107,7 +107,7 @@ async function runAutoSync(){
     return {status:'completed',league:league.slug,round,checkpoint,result,telegram};
   }catch(error){
     const message=error instanceof Error?error.message:'auto_sync_failed';
-    await rpc('fm_fail_auto_sync',withKey({day:round,checkpoint_name:checkpoint,error_text:message})).catch(()=>{});
+    await rpc('fm_fail_auto_sync',withKey({league:league.id,day:round,checkpoint_name:checkpoint,error_text:message})).catch(()=>{});
     await notifyAdmin(league,`Auto-sync fallito (giornata ${round}, ${checkpoint}): ${message}`);
     throw error;
   }
