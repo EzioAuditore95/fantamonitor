@@ -57,3 +57,6 @@ __pycache__/
 
 # Claude Code: impostazioni locali non condivise.
 /.claude/settings.local.json
+
+# Supabase CLI: stato del link locale, non va nel repo
+supabase/.temp/

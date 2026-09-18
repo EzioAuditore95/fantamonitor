@@ -139,13 +139,36 @@ del container è il limite di scala reale, non la CPU.**
 
 ### Pianificazione dei checkpoint
 
-`fm_claim_due_auto_sync` restituisce ora anche la lega, e scandisce tutte quelle con
-`auto_sync_enabled`: due leghe possono avere checkpoint simultanei senza bloccarsi, perché i
-vincoli di unicità includono `league_id`. Il claim va invocato dall'esterno con
-`POST /auto-sync` — le immagini `Dockerfile.cron` e `Dockerfile.scheduler` sono state
-eliminate insieme a `cron.mjs` e `scheduler-server.mjs`, che erano in gran parte copie di
-`server.mjs` e producevano per giunta snapshot senza il blocco `competition`. Esiste il
-workflow `auto-sync.yml`, manuale (`workflow_dispatch`).
+**Lo scheduler vive dentro il database, non su GitHub Actions.** La catena reale è:
+
+```
+pg_cron (job fm_evt_<lega>_r<n>_<checkpoint>_main / _retry)
+  → public.fm_fire_scheduler_event()
+  → legge dal Vault: fm_event_scheduler_url, fm_event_scheduler_secret
+  → net.http_post  <url>/run   Authorization: Bearer <secret>
+  → il servizio scheduler su Railway, che esegue il claim
+  → public.fm_schedule_next_event() prenota il checkpoint successivo
+```
+
+`fm_next_checkpoint_watchdog` (`17 */6 * * *`) è la rete di sicurezza che ripianifica.
+
+> **Non eliminare il servizio scheduler su Railway.** È lui a esporre il `POST /run` che
+> pg_cron chiama: senza, i job continuerebbero a scattare, `net.http_post` incasserebbe 404
+> e l'auto-sync morirebbe **in silenzio**, senza errori e senza messaggi Telegram. Una
+> versione precedente di questa pagina diceva il contrario: era sbagliata.
+
+`fm_schedule_next_event` prenota il prossimo checkpoint **di ogni lega attiva** con
+`auto_sync_enabled`, e mette la lega nel nome del job: senza, due leghe con lo stesso calcio
+d'inizio si sovrascriverebbero la voce cron a vicenda. `fm_claim_due_auto_sync` restituisce
+anche la lega, e i vincoli di unicità includono `league_id`, quindi checkpoint simultanei su
+leghe diverse non si bloccano.
+
+`cron.mjs` e `scheduler-server.mjs` sono stati rimossi dal repo durante il consolidamento del
+connettore, ma **il servizio che li esegue è ancora quello vivo in produzione**: finché
+`fm_fire_scheduler_event` punta al suo `/run`, quel deployment non va toccato. Migrarlo su
+`POST /auto-sync` del connettore nuovo richiede prima di risolvere l'autenticazione, perché
+quell'endpoint accetta solo un token OIDC di GitHub Actions, che pg_net non può produrre.
+Esiste anche il workflow `auto-sync.yml`, manuale (`workflow_dispatch`).
 
 Gli orari di inizio giornata vivono in `fm_round_schedule`: le righe future restano a
 `NULL` finché la Lega non pubblica gli orari ufficiali, e un checkpoint senza orario non
@@ -246,8 +269,8 @@ inatteso da guardare prima di proseguire. Fare un backup prima resta la regola.
 5. **Ridistribuire il connettore** e poi rimuovere da Railway `FANTACALCIO_USERNAME`,
    `FANTACALCIO_PASSWORD`, `TELEGRAM_CHAT_ID`, `TELEGRAM_THREAD_ID` e
    `TELEGRAM_ADMIN_CHAT_ID`: non vengono più lette.
-6. **Eliminare i servizi cron e scheduler** su Railway: le loro immagini non esistono più
-   nel repo. Il claim si invoca con `POST /auto-sync`.
+6. **Lasciare in piedi il servizio scheduler**, che riceve le chiamate di pg_cron. Vedi il
+   riquadro nella sezione "Pianificazione dei checkpoint".
 7. **Ricollegare l'account Fantacalcio** dal dialog nel banner, poi premere
    *Verifica connessione*. Finché non lo si fa, ogni cattura fallisce con
    `connector_credentials_missing` — è il prezzo di non custodire più una password in chiaro

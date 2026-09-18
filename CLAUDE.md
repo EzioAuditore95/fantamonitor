@@ -252,8 +252,16 @@ superato — la storia git li conserva, il repo no.
   `fm_bot_import_snapshot` usano `digest(sample::text)` (ordinamento di Postgres). Lo stesso
   snapshot importato dalla UI e dal bot ottiene due id diversi: non corrompe nulla solo
   perché la deduplica è su `(round, observed_at)`. Difetto noto, non correggerlo di sfuggita.
-- `.github/workflows/auto-sync.yml` è `workflow_dispatch` (nessun cron). Il pinning
-  `EzioAuditore95/fantamonitor` + `refs/heads/main` è verificato lato connettore.
+- **L'auto-sync in produzione è pianificato da pg_cron dentro Supabase**, non da GitHub
+  Actions: `fm_fire_scheduler_event` legge URL e token dal Vault e chiama `/run` del servizio
+  scheduler via pg_net, poi `fm_schedule_next_event` prenota il checkpoint dopo. Il workflow
+  `auto-sync.yml` è `workflow_dispatch` ed è solo la via manuale. Non spegnere quel servizio
+  Railway: l'auto-sync morirebbe in silenzio. Il pinning `EzioAuditore95/fantamonitor` +
+  `refs/heads/main` è verificato lato connettore.
+- La storia delle migrazioni di Supabase contiene **11 voci create fuori dal repo** (10–11/09
+  più il primo scaffolding). Sono state riallineate con `supabase migration repair` il
+  19/09: da lì in poi `db push` è di nuovo utilizzabile, ma quelle voci restano nella
+  tabella e non hanno un file corrispondente.
 - Dati reali (`lib/data/`, `prototype/data/`) sono fuori dal repo: non ricrearli né
   committare esempi con nomi o risultati veri.
 
