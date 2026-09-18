@@ -1,10 +1,17 @@
 name: Validate FANTAMONITOR
 on:
+  # Su tutti i branch, non solo su main: il filtro precedente lasciava scoperti i branch di
+  # lavoro, e un package-lock.json fuori sync è rimasto lì sei commit prima che Vercel lo
+  # scoprisse al posto nostro. `npm ci` qui sotto è il controllo che lo intercetta.
   push:
-    branches: [main, deploy/vercel-supabase]
   pull_request:
 permissions:
   contents: read
+# Un push che ne supera un altro sullo stesso branch annulla il run precedente; su main si
+# lascia finire, perché lì il risultato di ogni commit conta.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 jobs:
   validate:
     runs-on: ubuntu-latest
