@@ -71,10 +71,21 @@ rotto niente — nessuna era letta dalla web app; è la rotazione ad avere conse
 | `SUPABASE_SECRET_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | service-role: **scavalca ogni policy RLS** | nulla in questo progetto: nessun componente la usa |
 | `SUPABASE_JWT_SECRET` | permette di **firmare qualsiasi JWT** del progetto | **tutte le sessioni attive cadono**: gli utenti rifanno l'accesso |
 | `POSTGRES_PASSWORD`, `POSTGRES_URL`, `POSTGRES_PRISMA_URL`, `POSTGRES_URL_NON_POOLING` | connessione diretta al database, fuori dalla RLS | il link della CLI (`supabase/.temp/`) va rifatto con `supabase link` |
-| `EVENT_SCHEDULER_SECRET` | il bearer con cui pg_cron fa scattare i checkpoint | va aggiornato **in tre posti**: Vault (`fm_event_scheduler_secret`), servizio scheduler su Railway, e qui. Finché non coincidono, `/run` risponde 401 |
+| ~~`EVENT_SCHEDULER_SECRET`~~ | il bearer con cui pg_cron fa scattare i checkpoint | **RUOTATO il 19/09**: nuovo valore su Vault e sul servizio scheduler, verificato che un bearer sbagliato dia 401, che quello nuovo dia 200, e che l'impronta SHA-256 del Vault coincida con quella impostata su Railway — altrimenti pg_cron manderebbe un token che lo scheduler rifiuta |
 
 `FANTACALCIO_USERNAME` e `FANTACALCIO_PASSWORD` erano in questo elenco: risultano già rimosse.
 La password di Fantacalcio esiste ora **solo** cifrata in `fm_league_credentials`.
+
+## Un fatto che toglie il rischio peggiore
+
+`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` è nel formato nuovo `sb_publishable_…`, **non è un
+JWT firmato con `SUPABASE_JWT_SECRET`**. Ruotare il JWT secret quindi **non spegne l'app**:
+fa cadere le sessioni attive, e basta. Era il rischio più grosso dell'elenco ed è escluso.
+
+Ne discende una raccomandazione più forte della rotazione: se il progetto è migrato alle
+chiavi nuove — e l'uso di `sb_publishable_` dice di sì — le chiavi legacy JWT
+(`SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) e il JWT secret si possono **disabilitare**
+dal pannello, invece che ruotare. Una chiave disabilitata non va poi ricordata.
 
 ## Ordine consigliato
 
