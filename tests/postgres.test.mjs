@@ -383,25 +383,63 @@ test('the bot importer derives its league from the body, like the admin one',asy
  // Round 31 does not exist for beta, even though it does for alpha.
  await assert.rejects(bot('select fm_bot_import_snapshot($1,$2::jsonb)',[BOT_KEY,JSON.stringify(betaBodyAt(31,stamp))]),/invalid_snapshot_time/);
 });
-test('the bot round and telegram RPCs refuse to guess between two leagues',async()=>{
- for(const sql of ['select fm_current_round_for_bot($1)','select fm_next_round_for_bot($1)',
-   "select fm_get_telegram_message($1,5)","select fm_upsert_telegram_message($1,5,'-100111',42,'T-1h')"])
-  await assert.rejects(bot(sql,[BOT_KEY]),/league_required/,sql);
- await db.query('update fm_leagues set active=false where id=$1',[BETA]);
- try{
-  assert.equal((await bot('select fm_current_round_for_bot($1) as r',[BOT_KEY])).rows[0].r,5);
-  assert.equal((await bot('select fm_next_round_for_bot($1) as r',[BOT_KEY])).rows[0].r.round,5);
-  assert.equal((await bot('select fm_get_telegram_message($1,5) as m',[BOT_KEY])).rows[0].m,null);
-  await bot("select fm_upsert_telegram_message($1,5,'-100111',42,'T-1h')",[BOT_KEY]);
-  const state=(await bot('select fm_get_telegram_message($1,5) as m',[BOT_KEY])).rows[0].m;
-  assert.equal(state.message_id,42);
-  assert.equal(state.chat_id,'-100111');
-  assert.equal((await db.query('select league_id from fm_telegram_messages where round=5')).rows[0].league_id,ALPHA);
-  // A second upsert updates instead of duplicating.
-  await bot("select fm_upsert_telegram_message($1,5,'-100111',43,'T-15m')",[BOT_KEY]);
-  assert.equal((await db.query('select count(*)::int as n from fm_telegram_messages where round=5')).rows[0].n,1);
-  assert.equal((await bot('select fm_get_telegram_message($1,5) as m',[BOT_KEY])).rows[0].m.message_id,43);
- }finally{await db.query('update fm_leagues set active=true where id=$1',[BETA]);}
+// PostgREST risolve le funzioni per NOME degli argomenti: una chiamata con un argomento
+// che la firma non ha fallisce con PGRST202 a runtime, e nessun test sul solo SQL o sul
+// solo connettore se ne accorge. È successo davvero, ed è ciò che questo test presidia.
+test('every RPC the connector calls exists with exactly those argument names',async()=>{
+ const sources=await Promise.all(['../connector/server.mjs','../connector/lib/telegram.mjs','../connector/lib/leagues.mjs','../connector/lib/capture.mjs']
+  .map(f=>readFile(new URL(f,import.meta.url),'utf8')));
+ const calls=new Map();
+ for(const src of sources){
+  for(const m of src.matchAll(/rpc\('(fm_[a-z_]+)',\s*withKey\(\{/g)){
+   // Scansione con contatore di profondità: gli argomenti contengono graffe annidate
+   // (Object.fromEntries(...)), che una regex non sa chiudere.
+   let i=m.index+m[0].length,depth=0,buf='';
+   for(;i<src.length;i++){
+    const c=src[i];
+    if(c==='{'||c==='('||c==='[')depth++;
+    else if(c==='}'&&depth===0)break;
+    else if(c==='}'||c===')'||c===']')depth--;
+    buf+=c;
+   }
+   const args=['access_key'];
+   let key='',d=0;
+   for(const c of buf+','){
+    if(c==='{'||c==='('||c==='[')d++;
+    else if(c==='}'||c===')'||c===']')d--;
+    if(c===','&&d===0){const name=key.split(':')[0].trim();if(name)args.push(name);key='';}
+    else key+=c;
+   }
+   calls.set(m[1]+'|'+args.sort().join(','),{name:m[1],args:args.sort()});
+  }
+ }
+ assert.ok(calls.size>=8,`trovate solo ${calls.size} chiamate: la regex non sta leggendo il connettore`);
+ for(const {name,args} of calls.values()){
+  const rows=(await db.query(`select pg_get_function_identity_arguments(p.oid) as sig
+   from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname=$1`,[name])).rows;
+  assert.ok(rows.length,`${name} non esiste in nessuna migrazione`);
+  const shapes=rows.map(r=>r.sig.split(',').map(a=>a.trim().split(' ')[0]).sort().join(','));
+  assert.ok(shapes.includes(args.join(',')),
+   `${name}(${args.join(',')}) non corrisponde a nessuna firma: ${shapes.map(x=>'('+x+')').join(' ')}`);
+ }
+});
+test('the bot RPCs are scoped by the league they are given',async()=>{
+ await assert.rejects(bot('select fm_current_round_for_bot($1,null::uuid)',[BOT_KEY]),/league_required/);
+ await assert.rejects(bot('select fm_get_telegram_message($1,null::uuid,5)',[BOT_KEY]),/league_required/);
+ assert.equal((await bot('select fm_current_round_for_bot($1,$2::uuid) as r',[BOT_KEY,ALPHA])).rows[0].r,5);
+ assert.equal((await bot('select fm_next_round_for_bot($1,$2::uuid) as r',[BOT_KEY,ALPHA])).rows[0].r.round,5);
+ // Beta ha il proprio calendario: la stessa chiamata deve dare una risposta diversa.
+ await db.query("update fm_round_schedule set start_at=null where league_id=$1",[BETA]);
+ await db.query("update fm_round_schedule set start_at=now()+interval '2 hours' where league_id=$1 and round=7",[BETA]);
+ assert.equal((await bot('select fm_current_round_for_bot($1,$2::uuid) as r',[BOT_KEY,BETA])).rows[0].r,7);
+ // I messaggi Telegram non si mescolano fra leghe.
+ await bot("select fm_upsert_telegram_message($1,$2::uuid,5,'-100alpha',11,'T-1h')",[BOT_KEY,ALPHA]);
+ await bot("select fm_upsert_telegram_message($1,$2::uuid,5,'-100beta',22,'T-1h')",[BOT_KEY,BETA]);
+ assert.equal((await bot('select fm_get_telegram_message($1,$2::uuid,5) as m',[BOT_KEY,ALPHA])).rows[0].m.message_id,11);
+ assert.equal((await bot('select fm_get_telegram_message($1,$2::uuid,5) as m',[BOT_KEY,BETA])).rows[0].m.message_id,22);
+ assert.equal((await db.query('select count(*)::int as n from fm_telegram_messages where round=5')).rows[0].n,2);
+ // Una giornata fuori dal calendario della lega non è accettata.
+ await assert.rejects(bot("select fm_upsert_telegram_message($1,$2::uuid,31,'-100beta',22,'T-1h')",[BOT_KEY,BETA]),/invalid_telegram_state/);
 });
 test('the connector can store a session and team ids for one league only',async()=>{
  const SEALED2='v1.'+'z'.repeat(40)+'.'+'y'.repeat(16)+'.'+'x'.repeat(22)+'.'+'w'.repeat(30);

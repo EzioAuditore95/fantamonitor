@@ -236,10 +236,14 @@ superato — la storia git li conserva, il repo no.
   `any((select fm_my_league_ids())::uuid[])`, che resta un InitPlan valutato una volta per
   query. La forma `fm_is_member(league_id)` dentro una policy sarebbe invece una sotto-query
   correlata, valutata per riga.
-- `fm_default_league()` è un ponte temporaneo: risolve l'unica lega attiva e restituisce
-  `null` (quindi `league_required`) appena ce ne sono due. Lo usano le RPC del bot chiamate
-  senza lega e lo shim a 2 argomenti di `fm_save_review`. Va rimosso quando nessun chiamante
-  userà più le firme vecchie.
+- **PostgREST risolve le funzioni per nome degli argomenti**: una chiamata con un argomento
+  che la firma non ha fallisce a runtime con `PGRST202`, e né i test SQL né quelli del
+  connettore se ne accorgono da soli. È già successo — il connettore passava `league` a
+  quattro RPC del bot che ancora risolvevano la lega da sé, e ogni comando Telegram falliva
+  mentre il resto funzionava. Il presidio è il test *"every RPC the connector calls exists
+  with exactly those argument names"* in `tests/postgres.test.mjs`.
+- `fm_default_league()` resta solo per lo shim a 2 argomenti di `fm_save_review` e per
+  `fm_fail_auto_sync` a 4. Le RPC del bot prendono ora la lega esplicitamente.
 - **`fm_fail_auto_sync` è l'eccezione al ponte, e per un buon motivo.** Se non riesce a
   risolvere la lega marca comunque il run come `failed`: lasciarlo `running` lo renderebbe
   irrecuperabile, perché `fm_claim_due_auto_sync` riprende soltanto i run `failed`, e quel
