@@ -1,8 +1,14 @@
 # Bonifica dei segreti su Vercel
 
-Rilevazione del 19/09/2026. L'ambiente **Production** della web app contiene 22 variabili;
-il codice ne legge **cinque**. Le altre diciassette non sono lette da nulla, ma stanno
-nell'ambiente di esecuzione di un'applicazione esposta su internet.
+Rilevazione del 19/09/2026: l'ambiente **Production** conteneva 22 variabili e il codice ne
+legge cinque. **Bonifica eseguita lo stesso giorno**: le diciassette non lette sono state
+rimosse e la produzione è stata ridistribuita — togliere una variabile non la toglie
+dall'istanza già in esecuzione, serve un redeploy.
+
+Stato attuale: `production` ha **solo le cinque lette**; `preview` ne ha tre.
+**Le rotazioni elencate sotto restano da fare**: come avverte Vercel stesso, *removing this
+variable does not revoke the credential*. Rimuovere riduce l'esposizione, non annulla il
+fatto che quelle chiavi siano state dove non servivano.
 
 Non esiste alcuna integrazione Supabase attiva sul progetto (`vercel integration ls` →
 *No resources found*): sono state aggiunte a mano e **non verranno ricreate** se rimosse.
@@ -30,15 +36,15 @@ Tutto il resto è rimuovibile senza toccare il codice.
 input utente, e una sua compromissione non deve rivelare nulla. Con la privata nello stesso
 ambiente quella garanzia non esiste.
 
-1. Rimuoverla da `production` e da `preview`.
-2. **Ruotare la coppia**, perché una chiave che è stata in un posto che non la richiedeva ha
+1. ~~Rimuoverla da `production` e da `preview`~~ — **fatto il 19/09**, con redeploy.
+2. **Ruotare la coppia** — *da fare*, perché una chiave che è stata in un posto che non la richiedeva ha
    provenienza incerta: genera (procedura in [README.md](README.md)), imposta la pubblica su
    Vercel e la privata **solo** sul connettore Railway, ridistribuisci entrambi.
 3. Il testo cifrato già in `fm_league_credentials` diventa illeggibile: l'amministratore
    ricollega l'account dal dialog. Il salvataggio azzera `last_verified_at`, quindi le leghe
    non ancora ricollegate si riconoscono a colpo d'occhio.
 
-## 2. Togliere e basta — non sono segreti
+## 2. Rimosse — non erano segreti
 
 Valori pubblici per progetto o semplici coordinate. Nessuna rotazione, nessuna conseguenza.
 
@@ -50,11 +56,11 @@ Valori pubblici per progetto o semplici coordinate. Nessuna rotazione, nessuna c
 | `POSTGRES_USER`, `POSTGRES_HOST`, `POSTGRES_DATABASE` | coordinate, non credenziali |
 | `CONNECTOR_URL` | un URL; la app usa `FANTAMONITOR_CONNECTOR_URL` |
 
-## 3. Togliere **e** ruotare
+## 3. Rimosse, ma **da ruotare**
 
-Qui rimuovere non basta: essere state a lungo dove non servivano non le rende compromesse,
-ma ne rende la provenienza incerta. Nessuna è letta dalla web app, quindi **la rimozione non
-rompe niente**; è la rotazione che ha conseguenze, indicate qui sotto.
+Rimosse da Vercel il 19/09, **ma non ancora ruotate**. Essere state a lungo dove non
+servivano non le rende compromesse, ma ne rende la provenienza incerta. La rimozione non ha
+rotto niente — nessuna era letta dalla web app; è la rotazione ad avere conseguenze.
 
 | Variabile | Cosa dà | Cosa si rompe ruotandola |
 |---|---|---|
@@ -79,7 +85,10 @@ La password di Fantacalcio esiste ora **solo** cifrata in `fm_league_credentials
 
 ## Preview
 
-`preview` contiene `FM_CREDENTIAL_PRIVATE_KEY`, `EVENT_SCHEDULER_SECRET`,
-`FANTAMONITOR_CONNECTOR_SECRET` e `CONNECTOR_URL`. I deployment di anteprima sono
-raggiungibili da internet: vale lo stesso ragionamento della produzione, e la chiave privata
-va tolta anche da lì.
+La chiave privata è stata tolta anche da `preview`. Restano `EVENT_SCHEDULER_SECRET`,
+`FANTAMONITOR_CONNECTOR_SECRET` e `CONNECTOR_URL`.
+
+`EVENT_SCHEDULER_SECRET` **non serve in preview**: i due posti che devono coincidere sono il
+Vault e lo scheduler su Railway. Va tolta. `FANTAMONITOR_CONNECTOR_SECRET` serve solo se si
+vuole che un deployment di anteprima parli col connettore di produzione — il che è una
+domanda a sé, perché significa che un'anteprima può far partire catture reali.
