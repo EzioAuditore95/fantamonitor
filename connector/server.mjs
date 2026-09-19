@@ -52,9 +52,16 @@ function chatIdOf(update){
 }
 async function handleTelegramUpdate(update){
   // An unknown chat is ignored: this is where a message could land in another league's
-  // channel, the worst failure this product can have.
-  const league=leagueForChat(chatIdOf(update),await loadLeagues());
-  if(!league)return;
+  // channel, the worst failure this product can have. Ignoring it silently, though, makes
+  // a misconfigured chat id impossible to diagnose — so it is refused out loud.
+  const chatId=chatIdOf(update);
+  const leagues=await loadLeagues();
+  const league=leagueForChat(chatId,leagues);
+  if(!league){
+    console.warn('telegram_chat_unknown',{chatId:String(chatId),
+      knownChats:leagues.map(l=>({league:l.slug,chat:l.telegramChatId?String(l.telegramChatId):null,admin:l.telegramAdminChatId?String(l.telegramAdminChatId):null}))});
+    return;
+  }
   const callback=update.callback_query;
   if(callback){
     try{
