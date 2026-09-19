@@ -432,6 +432,20 @@ test('the bot RPCs are scoped by the league they are given',async()=>{
  await db.query("update fm_round_schedule set start_at=null where league_id=$1",[BETA]);
  await db.query("update fm_round_schedule set start_at=now()+interval '2 hours' where league_id=$1 and round=7",[BETA]);
  assert.equal((await bot('select fm_current_round_for_bot($1,$2::uuid) as r',[BOT_KEY,BETA])).rows[0].r,7);
+ // Fuori dalla finestra di sorveglianza si torna all'ultima giocata: la pagina della
+ // prossima giornata su Fantacalcio non è ancora aperta, e tentarla fallisce sempre.
+ await db.query("update fm_round_schedule set start_at=null where league_id=$1",[BETA]);
+ await db.query("update fm_round_schedule set start_at=now()-interval '9 days' where league_id=$1 and round=1",[BETA]);
+ await db.query("update fm_round_schedule set start_at=now()-interval '2 days' where league_id=$1 and round=2",[BETA]);
+ await db.query("update fm_round_schedule set start_at=now()+interval '20 days' where league_id=$1 and round=3",[BETA]);
+ assert.equal((await bot('select fm_current_round_for_bot($1,$2::uuid) as r',[BOT_KEY,BETA])).rows[0].r,2,'ultima giocata, non la prossima');
+ // Dentro la finestra vince comunque la giornata imminente.
+ await db.query("update fm_round_schedule set start_at=now()+interval '3 hours' where league_id=$1 and round=3",[BETA]);
+ assert.equal((await bot('select fm_current_round_for_bot($1,$2::uuid) as r',[BOT_KEY,BETA])).rows[0].r,3,'in finestra vince l\'imminente');
+ // Stagione non ancora cominciata: la prima in calendario.
+ await db.query("update fm_round_schedule set start_at=null where league_id=$1",[BETA]);
+ await db.query("update fm_round_schedule set start_at=now()+interval '30 days' where league_id=$1 and round=4",[BETA]);
+ assert.equal((await bot('select fm_current_round_for_bot($1,$2::uuid) as r',[BOT_KEY,BETA])).rows[0].r,4);
  // I messaggi Telegram non si mescolano fra leghe.
  await bot("select fm_upsert_telegram_message($1,$2::uuid,5,'-100alpha',11,'T-1h')",[BOT_KEY,ALPHA]);
  await bot("select fm_upsert_telegram_message($1,$2::uuid,5,'-100beta',22,'T-1h')",[BOT_KEY,BETA]);
