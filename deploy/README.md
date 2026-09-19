@@ -322,6 +322,12 @@ from public.fm_observations o join public.fm_leagues l on l.id=o.league_id
 where o.body->>'league' is distinct from l.slug;
 ```
 
+## Segreti
+
+L'inventario dell'ambiente Vercel e il piano di bonifica sono in
+[SECRETS.md](SECRETS.md): la web app legge cinque variabili, le altre diciassette sono
+residui, e alcune vanno ruotate oltre che rimosse.
+
 ## Verifiche
 
 ```sh
