@@ -231,6 +231,14 @@ superato — la storia git li conserva, il repo no.
 - `tests/postgres.test.mjs` esegue le migrazioni in PGlite con ruoli e `auth.uid()`
   simulati: **ogni nuova migrazione deve poter girare lì**, quindi niente costrutti
   esclusivi di Supabase non emulabili. Usa `prototype/tests/fixture.json` come snapshot valido.
+- I dialog e i drawer stanno a `z-index` 90/91 e le tendine portate a 100, sopra tutta la
+  cromatura del tema (topbar 50, barra tab 60, FAB 70, bottom nav 80). Serviva: prima erano
+  tutti sotto la barra delle tab. **Attenzione però**: il guasto non si riproduce in
+  Chromium a nessuna larghezza — verificato a 900, 1400 e 2000 px — quindi la causa vera è
+  probabilmente specifica del browser (composizione di `backdrop-filter`, che `.topbar` e
+  `[data-slot=dialog-content]` hanno entrambi). Quello che è dimostrato è che la correzione
+  funziona, non perché fosse necessaria. Sotto i 1000 px `.navigation` è comunque
+  `fixed; z-index: 60`, e lì supererebbe un dialog a 50 per le regole normali.
 - Nelle policy RLS il cast è obbligatorio: `any((select fm_my_league_ids()))` fa leggere al
   parser la forma sotto-query e confronta `uuid` con `uuid[]`. Serve
   `any((select fm_my_league_ids())::uuid[])`, che resta un InitPlan valutato una volta per
