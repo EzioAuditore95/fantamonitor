@@ -1,12 +1,13 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {generateKeyPairSync} from 'node:crypto';
+import {createHmac,generateKeyPairSync} from 'node:crypto';
 import {createKeyedMutex,createLimiter} from '../lib/concurrency.mjs';
 import {leagueForChat,leagueBySlug,shouldReuseSession} from '../lib/leagues.mjs';
 import {open,seal,usernameFingerprint} from '../lib/credentials.mjs';
 import {competitionFrom,dashboardUrl,manageLineupsUrl,score,snapshotFor,standingRows,toTeamStatus} from '../lib/snapshot.mjs';
 import {buildMissingMessage,buildTelegramMessage,keyboardFor} from '../lib/telegram.mjs';
 import {enrichLineup,enrichTeam,teamLike} from '../lib/fantacalcio.mjs';
+import {bearerMatches,signedRequest} from '../lib/scheduler.mjs';
 
 const alpha={id:'league-a',slug:'alfa',name:'Alfa',season:'2026-2027',competitionId:'337500',roundCount:35,
  telegramChatId:'-100111',telegramThreadId:null,telegramAdminChatId:'-100999',teams:['Uno','Due','Tre','Quattro']};
@@ -141,4 +142,25 @@ test('the queue caps concurrency and serializes work per league', async()=>{
  assert.equal(await mutex.run('x',()=>'ok'),'ok');
  await new Promise(r=>setTimeout(r,0)); // la pulizia della catena avviene in un microtask successivo
  assert.equal(mutex.size,0,'le catene esaurite non restano in memoria');
+});
+
+test('the scheduler bearer is compared in constant time and never guessed',()=>{
+ assert.equal(bearerMatches('Bearer segreto','segreto'),true);
+ assert.equal(bearerMatches('Bearer sbagliato','segreto'),false);
+ assert.equal(bearerMatches('segreto','segreto'),false,'senza il prefisso Bearer non vale');
+ assert.equal(bearerMatches('Bearer segreto',''),false,'un segreto vuoto non autorizza nessuno');
+ assert.equal(bearerMatches(undefined,'segreto'),false);
+ assert.equal(bearerMatches('Bearer segreto piu lungo','segreto'),false);
+ // Lunghezze diverse non devono far esplodere timingSafeEqual.
+ assert.doesNotThrow(()=>bearerMatches('B','segreto-molto-lungo'));
+});
+test('the scheduler signs with the same HMAC the connector already checks',()=>{
+ const a=signedRequest('chiave','{}',1700000000000);
+ assert.equal(a.timestamp,'1700000000000');
+ assert.equal(a.body,'{}');
+ assert.match(a.signature,/^[0-9a-f]{64}$/);
+ // Stessa formula di lib/config.mjs: HMAC su `${timestamp}.${body}`.
+ const expected=createHmac('sha256','chiave').update('1700000000000.{}').digest('hex');
+ assert.equal(a.signature,expected);
+ assert.notEqual(signedRequest('altra','{}',1700000000000).signature,a.signature);
 });

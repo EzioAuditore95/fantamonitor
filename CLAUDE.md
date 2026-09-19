@@ -87,8 +87,10 @@ Browser ──► Next.js App Router (app/)
   l'auto-sync a checkpoint. Ha un proprio `package.json`; non fa parte della build Next.
   **Non contiene costanti di lega**: le legge da `fm_leagues_for_bot` con cache di 60 s.
   `connector/lib/*.mjs` separa ciò che tocca Playwright da ciò che non lo tocca —
-  `snapshot.mjs`, `telegram.mjs`, `leagues.mjs`, `concurrency.mjs` e `fantacalcio.mjs` sono
-  testabili senza browser, ed è ciò che `connector/tests/` esercita in CI.
+  `snapshot.mjs`, `telegram.mjs`, `leagues.mjs`, `concurrency.mjs`, `scheduler.mjs` e
+  `fantacalcio.mjs` sono testabili senza browser, ed è ciò che `connector/tests/` esercita in CI.
+  `scheduler-server.mjs` è un secondo deployment minimo: riceve il `POST /run` di pg_cron e
+  lo inoltra a `/auto-sync` del connettore. Non duplica nulla: 45 righe, nessuna dipendenza.
 - **`prototype/`** — adapter browser assistito (`collector.mjs`) e archivio evidenze
   Python (`monitor.py`). Fase storica, **ma i suoi test girano in CI**: non rimuoverla
   senza aggiornare `ci.yml`.

@@ -163,11 +163,18 @@ d'inizio si sovrascriverebbero la voce cron a vicenda. `fm_claim_due_auto_sync` 
 anche la lega, e i vincoli di unicità includono `league_id`, quindi checkpoint simultanei su
 leghe diverse non si bloccano.
 
-`cron.mjs` e `scheduler-server.mjs` sono stati rimossi dal repo durante il consolidamento del
-connettore, ma **il servizio che li esegue è ancora quello vivo in produzione**: finché
-`fm_fire_scheduler_event` punta al suo `/run`, quel deployment non va toccato. Migrarlo su
-`POST /auto-sync` del connettore nuovo richiede prima di risolvere l'autenticazione, perché
-quell'endpoint accetta solo un token OIDC di GitHub Actions, che pg_net non può produrre.
+`connector/scheduler-server.mjs` è un **guscio sottile**, 45 righe: verifica il bearer in
+tempo costante, firma un corpo vuoto con lo stesso HMAC che protegge `/sync` e inoltra a
+`POST /auto-sync` del connettore, con un singolo volo per non sovrapporsi al retry che
+pg_cron prenota cinque minuti dopo. Il claim, la cattura e la pubblicazione Telegram vivono
+in un posto solo. `cron.mjs` non esiste più: era in gran parte una copia di `server.mjs` e
+produceva snapshot privi del blocco `competition`.
+
+`/auto-sync` accetta quindi **due chiamanti**: GitHub Actions con un token OIDC, e lo
+scheduler con la firma HMAC. Nessun tipo di autenticazione nuovo rispetto a prima.
+
+Variabili del servizio scheduler: `EVENT_SCHEDULER_SECRET` (lo stesso valore che sta nel
+Vault come `fm_event_scheduler_secret`), `FANTAMONITOR_CONNECTOR_SECRET` e `CONNECTOR_URL`.
 Esiste anche il workflow `auto-sync.yml`, manuale (`workflow_dispatch`).
 
 Gli orari di inizio giornata vivono in `fm_round_schedule`: le righe future restano a

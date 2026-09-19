@@ -139,9 +139,15 @@ const server=http.createServer(async(req,res)=>{
     }
   }
   if(req.method==='POST'&&req.url==='/auto-sync'){
-    try{await verifyGithubAction(req);return plainJson(res,200,await runAutoSync());}
+    try{
+      // Due chiamanti legittimi: GitHub Actions con un token OIDC, e lo scheduler con la
+      // stessa firma HMAC che protegge già /sync. Nessun tipo di autenticazione nuovo.
+      if(req.headers['x-fm-signature']){ if(!auth(req,raw))throw new Error('unauthorized'); }
+      else await verifyGithubAction(req);
+      return plainJson(res,200,await runAutoSync());
+    }
     catch(error){const code=error instanceof Error?error.message:'auto_sync_failed';console.error('auto_sync_failed',{code});
-      return plainJson(res,code.startsWith('oidc_')?401:502,{error:code});}
+      return plainJson(res,code.startsWith('oidc_')||code==='unauthorized'?401:502,{error:code});}
   }
   return plainJson(res,404,{error:'not_found'});
 });
