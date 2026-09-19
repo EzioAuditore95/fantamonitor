@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { requireLeagueMember } from '@/app/auth';
 import { createClient } from '@/lib/supabase/server';
-import { credentialsConfigured,fingerprint,seal } from '@/lib/credentials';
+import { credentialKeyVersion,credentialsConfigured,fingerprint,seal } from '@/lib/credentials';
 import { checkConnectorCredentials } from '@/lib/sync';
 const headers={'Cache-Control':'private, no-store'};
 const MAX_BODY=131_072;
@@ -18,7 +18,8 @@ export async function GET(request:Request){
     const client=await createClient();
     const {data,error}=await client.rpc('fm_league_credential_status',{league:cfg.id});
     if(error)throw error;
-    return Response.json({...(data as object),encryptionReady:credentialsConfigured()},{headers});
+    // currentKeyVersion permette al dialog di dire se il segreto salvato è ancora apribile.
+    return Response.json({...(data as object),encryptionReady:credentialsConfigured(),currentKeyVersion:credentialsConfigured()?credentialKeyVersion():null},{headers});
   }catch(e){console.error('credential_status_failed',e instanceof Error?e.message:'unknown');
     return Response.json({error:'Stato delle credenziali non disponibile.'},{status:503,headers});}
 }
@@ -67,7 +68,7 @@ export async function POST(request:Request){
       console.info('credential_sealed',{league:cfg.slug,mode:'session',bytes:input.storageState.length});
     }
     const client=await createClient();
-    const {error}=await client.rpc('fm_set_league_credentials',{league:cfg.id,mode:input.mode,sealed,version:1,expires_at:expiresAt});
+    const {error}=await client.rpc('fm_set_league_credentials',{league:cfg.id,mode:input.mode,sealed,version:credentialKeyVersion(),expires_at:expiresAt});
     if(error)throw error;
     return Response.json({status:'saved'},{headers});
   }catch(e){

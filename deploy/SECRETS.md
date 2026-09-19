@@ -44,9 +44,11 @@ si apre con la chiave vecchia.
 non è mai esistito uno stato "collegato ma illeggibile" che mentisse nell'interfaccia:
 `key_version` è a 2 e lo stato è "non collegato" finché l'amministratore non ricollega.
 
-**Limite noto**: `POST /api/credentials` scrive sempre `version: 1`, quindi `key_version` non
-traccia davvero le rotazioni — il 2 attuale è stato scritto a mano. Se le rotazioni
-diventeranno frequenti, la versione va presa dalla configurazione invece che dal codice.
+`key_version` ora **traccia davvero le rotazioni**: la versione arriva da
+`FM_CREDENTIAL_KEY_VERSION` (default 1) e va alzata insieme alla chiave pubblica. Il dialog
+confronta la versione con cui un segreto è stato sigillato con quella corrente e, se
+differiscono, dice che le credenziali vanno ricollegate — invece di lasciar scoprire alla
+prima cattura fallita che non sono più apribili.
 
 ## 2. Rimosse — non erano segreti
 

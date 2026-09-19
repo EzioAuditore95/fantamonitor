@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {generateKeyPairSync} from 'node:crypto';
-import {seal,open} from '../lib/credentials.ts';
+import {seal,open,credentialKeyVersion} from '../lib/credentials.ts';
 const {publicKey,privateKey}=generateKeyPairSync('rsa',{modulusLength:3072,
  publicKeyEncoding:{type:'spki',format:'pem'},privateKeyEncoding:{type:'pkcs8',format:'pem'}});
 test('a sealed secret only opens with the matching private key',()=>{
@@ -29,4 +29,26 @@ test('a tampered envelope is rejected, never silently truncated',()=>{
  }
  assert.throws(()=>open('v2.'+parts.slice(1).join('.'),privateKey),/Busta non riconosciuta/);
  assert.throws(()=>open('non-una-busta',privateKey),/Busta non riconosciuta/);
+});
+
+test('the key version comes from configuration, not from the code',()=>{
+ // Era scritta fissa a 1: il campo esisteva, la migrazione lo valorizzava, ma non
+ // distingueva una chiave dall'altra — quindi non diceva se un segreto fosse ancora apribile.
+ const saved=process.env.FM_CREDENTIAL_KEY_VERSION;
+ try{
+  delete process.env.FM_CREDENTIAL_KEY_VERSION;
+  assert.equal(credentialKeyVersion(),1,'senza configurazione vale 1');
+  process.env.FM_CREDENTIAL_KEY_VERSION='2';
+  assert.equal(credentialKeyVersion(),2);
+  process.env.FM_CREDENTIAL_KEY_VERSION='17';
+  assert.equal(credentialKeyVersion(),17);
+  for(const bad of ['0','-1','due','1.5','']){
+   process.env.FM_CREDENTIAL_KEY_VERSION=bad;
+   if(bad===''){assert.equal(credentialKeyVersion(),1,'stringa vuota = non configurata');continue;}
+   assert.throws(()=>credentialKeyVersion(),/intero positivo/,`accettato "${bad}"`);
+  }
+ }finally{
+  if(saved===undefined)delete process.env.FM_CREDENTIAL_KEY_VERSION;
+  else process.env.FM_CREDENTIAL_KEY_VERSION=saved;
+ }
 });

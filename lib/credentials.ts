@@ -11,6 +11,15 @@ function pem(value:string){const text=value.includes('-----BEGIN')?value:Buffer.
 
 export function credentialPublicKey():string|null{const raw=process.env.FM_CREDENTIAL_PUBLIC_KEY;return raw?pem(raw):null;}
 export function credentialsConfigured(){return Boolean(credentialPublicKey());}
+// La versione dice con quale chiave è stato sigillato un segreto, e si alza insieme alla
+// chiave pubblica quando si ruota. Scriverla fissa nel codice rendeva il campo inutile.
+export function credentialKeyVersion():number{
+  const raw=process.env.FM_CREDENTIAL_KEY_VERSION;
+  if(!raw)return 1;
+  const value=Number(raw);
+  if(!Number.isInteger(value)||value<1)throw new Error('FM_CREDENTIAL_KEY_VERSION non è un intero positivo.');
+  return value;
+}
 
 export function seal(plaintext:string,publicKey:string=credentialPublicKey()??''):string{
   if(!publicKey)throw new Error('Chiave di cifratura non configurata.');

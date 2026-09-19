@@ -9,7 +9,7 @@ import { displayDate } from '@/lib/model';
 import type { LeagueConfig } from '@/lib/league';
 
 type Status={configured?:boolean;hasSession?:boolean;sessionExpiresAt?:string|null;keyVersion?:number;
- updatedAt?:string|null;lastVerifiedAt?:string|null;lastVerifiedStatus?:string|null;encryptionReady?:boolean;error?:string};
+ updatedAt?:string|null;lastVerifiedAt?:string|null;lastVerifiedStatus?:string|null;encryptionReady?:boolean;currentKeyVersion?:number|null;error?:string};
 
 export default function CredentialsDialog({config,canManage}:{config:LeagueConfig;canManage:boolean}){
   const [open,setOpen]=useState(false),[status,setStatus]=useState<Status|null>(null);
@@ -24,6 +24,8 @@ export default function CredentialsDialog({config,canManage}:{config:LeagueConfi
     return()=>{active=false};
   },[read]);
   const connected=Boolean(status?.configured||status?.hasSession);
+  // Un segreto sigillato con una chiave precedente non è più apribile: va ricollegato.
+  const staleKey=connected&&status?.keyVersion!=null&&status?.currentKeyVersion!=null&&status.keyVersion!==status.currentKeyVersion;
   async function save(){
     setSaving(true);setError('');setDone('');
     try{
@@ -59,6 +61,7 @@ export default function CredentialsDialog({config,canManage}:{config:LeagueConfi
         {status?.sessionExpiresAt&&<p className="muted">Sessione valida fino al {displayDate(status.sessionExpiresAt)}.</p>}
         <p className="muted">{status?.lastVerifiedAt?`Ultima verifica: ${displayDate(status.lastVerifiedAt)} · ${status.lastVerifiedStatus}`:'Mai verificato dal connettore.'}</p>
         {status&&status.encryptionReady===false&&<p role="alert" className="import-error">Cifratura non configurata: manca <code>FM_CREDENTIAL_PUBLIC_KEY</code>.</p>}
+        {staleKey&&<p role="alert" className="import-error">Cifrate con una chiave precedente (v{status?.keyVersion}, ora v{status?.currentKeyVersion}): vanno ricollegate.</p>}
       </div>
       <Tabs value={mode} onValueChange={setMode}>
         <TabsList className="period-tabs" aria-label="Modo di collegamento">

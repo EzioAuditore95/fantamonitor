@@ -224,7 +224,9 @@ Da fare almeno a fine stagione, e subito se si sospetta una fuga:
    azzera `last_verified_at`, quindi le leghe non ancora ricollegate sono visibili a colpo d'occhio;
 4. aggiorna `FM_CREDENTIAL_PRIVATE_KEY` sul connettore e rimuovi la chiave vecchia.
 
-Il campo `key_version` consente di distinguere le buste durante la transizione senza migrazioni.
+Il campo **Alzare `FM_CREDENTIAL_KEY_VERSION` sulla web app** insieme alla chiave pubblica (1 → 2 → …):
+è ciò che fa comparire nel dialog l'avviso "cifrate con una chiave precedente" per le leghe
+non ancora ricollegate, invece di lasciarlo scoprire alla prima cattura fallita.
 
 ### Rischio da dichiarare
 
