@@ -36,13 +36,17 @@ Tutto il resto è rimuovibile senza toccare il codice.
 input utente, e una sua compromissione non deve rivelare nulla. Con la privata nello stesso
 ambiente quella garanzia non esiste.
 
-1. ~~Rimuoverla da `production` e da `preview`~~ — **fatto il 19/09**, con redeploy.
-2. **Ruotare la coppia** — *da fare*, perché una chiave che è stata in un posto che non la richiedeva ha
-   provenienza incerta: genera (procedura in [README.md](README.md)), imposta la pubblica su
-   Vercel e la privata **solo** sul connettore Railway, ridistribuisci entrambi.
-3. Il testo cifrato già in `fm_league_credentials` diventa illeggibile: l'amministratore
-   ricollega l'account dal dialog. Il salvataggio azzera `last_verified_at`, quindi le leghe
-   non ancora ricollegate si riconoscono a colpo d'occhio.
+~~1. Rimuoverla da `production` e da `preview`.~~ **Fatto il 19/09**, con redeploy.
+~~2. Ruotare la coppia.~~ **Fatta il 19/09**: coppia RSA-3072 nuova, pubblica su Vercel,
+privata solo sul connettore, entrambi ridistribuiti. Verificato che la busta nuova **non**
+si apre con la chiave vecchia.
+~~3. Il testo cifrato diventa illeggibile.~~ Azzerato *prima* di sostituire le chiavi, così
+non è mai esistito uno stato "collegato ma illeggibile" che mentisse nell'interfaccia:
+`key_version` è a 2 e lo stato è "non collegato" finché l'amministratore non ricollega.
+
+**Limite noto**: `POST /api/credentials` scrive sempre `version: 1`, quindi `key_version` non
+traccia davvero le rotazioni — il 2 attuale è stato scritto a mano. Se le rotazioni
+diventeranno frequenti, la versione va presa dalla configurazione invece che dal codice.
 
 ## 2. Rimosse — non erano segreti
 
