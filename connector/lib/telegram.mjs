@@ -12,6 +12,8 @@ export function buildTelegramMessage(snapshot,checkpoint='LIVE'){
 export function buildMissingMessage(snapshot){const missing=snapshot.teams.filter(t=>!t.present).map(t=>t.name);return missing.length?`Giornata ${snapshot.round} — senza formazione (${missing.length})\n${missing.map(n=>`• ${n}`).join('\n')}`:`Giornata ${snapshot.round} — nessuna squadra mancante.`;}
 export function buildNextMessage(info){if(!info?.start_at)return 'Nessuna prossima giornata disponibile nel calendario.';const when=new Intl.DateTimeFormat('it-IT',{timeZone:'Europe/Rome',weekday:'short',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).format(new Date(info.start_at));return `Prossima giornata monitorata: ${info.round}\nInizio: ${when}`;}
 
+export const isUnchanged=error=>/message is not modified/i.test(String(error?.message??error));
+
 export const keyboardFor=league=>({inline_keyboard:[
   [{text:'Aggiorna stato',callback_data:'status'},{text:'Sincronizza ora',callback_data:'sync'}],
   [{text:'Prossima giornata',callback_data:'next'},{text:'Statistiche',url:`${appUrl}/l/${league.slug}/stats`}],
@@ -45,7 +47,13 @@ export async function publishTelegramStatus(league,snapshot,checkpoint,{force=fa
       await telegramApi('editMessageText',{chat_id:chatId,message_id:Number(state.message_id),text:payload.text,reply_markup:keyboard,disable_web_page_preview:true});
       await remember(state.message_id);
       return {status:'edited',messageId:Number(state.message_id)};
-    }catch(e){console.error('telegram_edit_failed',{league:league.slug,round:snapshot.round,error:String(e)});}
+    }catch(e){
+      // "message is not modified" significa che il messaggio è già quello giusto: trattarlo
+      // come errore faceva ricadere nel sendMessage, cioè un doppione nel canale proprio
+      // quando fra un checkpoint e l'altro non era cambiato nulla.
+      if(isUnchanged(e)){await remember(state.message_id);return {status:'unchanged',messageId:Number(state.message_id)};}
+      console.error('telegram_edit_failed',{league:league.slug,round:snapshot.round,error:String(e)});
+    }
   }
   const message=await telegramApi('sendMessage',payload);
   await remember(message.message_id);

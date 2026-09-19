@@ -5,7 +5,7 @@ import {createKeyedMutex,createLimiter} from '../lib/concurrency.mjs';
 import {leagueForChat,leagueBySlug,shouldReuseSession} from '../lib/leagues.mjs';
 import {open,seal,usernameFingerprint} from '../lib/credentials.mjs';
 import {competitionFrom,dashboardUrl,manageLineupsUrl,score,snapshotFor,standingRows,toTeamStatus} from '../lib/snapshot.mjs';
-import {buildMissingMessage,buildTelegramMessage,keyboardFor} from '../lib/telegram.mjs';
+import {buildMissingMessage,buildTelegramMessage,isUnchanged,keyboardFor} from '../lib/telegram.mjs';
 import {enrichLineup,enrichTeam,teamLike} from '../lib/fantacalcio.mjs';
 import {bearerMatches,signedRequest} from '../lib/scheduler.mjs';
 
@@ -163,4 +163,14 @@ test('the scheduler signs with the same HMAC the connector already checks',()=>{
  const expected=createHmac('sha256','chiave').update('1700000000000.{}').digest('hex');
  assert.equal(a.signature,expected);
  assert.notEqual(signedRequest('altra','{}',1700000000000).signature,a.signature);
+});
+
+test('an unchanged message is not reposted as a duplicate',()=>{
+ // Telegram rifiuta un edit identico. Trattarlo da errore significava mandare un doppione
+ // nel canale proprio quando fra due checkpoint non era cambiato nulla.
+ assert.equal(isUnchanged(new Error('telegram_editMessageText_failed:Bad Request: message is not modified: specified new message content and reply markup are exactly the same')),true);
+ assert.equal(isUnchanged('Bad Request: MESSAGE IS NOT MODIFIED'),true,'confronto senza distinzione di maiuscole');
+ assert.equal(isUnchanged(new Error('Bad Request: message to edit not found')),false);
+ assert.equal(isUnchanged(new Error('telegram_editMessageText_failed:429 Too Many Requests')),false);
+ assert.equal(isUnchanged(undefined),false);
 });
