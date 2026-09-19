@@ -684,6 +684,26 @@ h2,
   box-shadow: 0 10px 28px rgba(54,125,241,.24), inset 0 1px 0 rgba(255,255,255,.22);
 }
 
+/* Il tema vetro impila fino a 80 (la bottom nav) e disegna .topbar e .navigation con
+   backdrop-filter, mentre shadcn porta overlay e contenuto del dialog a z-50: la barra
+   delle tab finiva quindi sopra il dialog. I popup portati nel body (select) devono
+   restare sopra il dialog, altrimenti una tendina aperta dentro un dialog sparisce. */
+[data-slot=dialog-overlay],
+[data-slot=sheet-overlay] {
+  z-index: 90 !important;
+}
+
+[data-slot=dialog-content],
+[data-slot=sheet-content] {
+  z-index: 91 !important;
+}
+
+[data-slot=select-content],
+[data-slot=popover-content],
+[data-slot=dropdown-menu-content] {
+  z-index: 100 !important;
+}
+
 [data-slot=dialog-content],
 [data-slot=sheet-content],
 [data-slot=select-content] {

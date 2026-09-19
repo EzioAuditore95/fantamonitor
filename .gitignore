@@ -60,3 +60,5 @@ __pycache__/
 
 # Supabase CLI: stato del link locale, non va nel repo
 supabase/.temp/
+
+.repro/
