@@ -471,4 +471,85 @@ test('the connector can store a session and team ids for one league only',async(
  assert.equal(ids[0].fantacalcio_team_id,555);
  assert.equal((await db.query('select count(*)::int as n from fm_league_teams where fantacalcio_team_id is not null and league_id=$1',[ALPHA])).rows[0].n,0);
 });
+// ---------------------------------------------------------------- Serie A grades
+// Championship data, deliberately outside the league scope: every signed-in user reads the
+// same rows, and being admin of any league is what buys the right to write them.
+const serieARound=(round,over=true,extra={})=>({season:'2026-27',round,final:over,
+ matches:[{match_id:17995,home_team_id:2,away_team_id:18,home_goals:1,away_goals:1,kickoff:'2026-09-19T13:00:00Z',status:over?4:3},
+  {match_id:17996,home_team_id:1,away_team_id:3,home_goals:0,away_goals:2,kickoff:'2026-09-19T16:00:00Z',status:4}],
+ teams:[{id:1,name:'Atalanta'},{id:2,name:'Bologna'},{id:3,name:'Roma'},{id:18,name:'Torino'}],
+ players:[{id:133,name:'Skorupski',role:'P',team_id:2},{id:5585,name:'Malen',role:'A',team_id:3}],
+ grades:[{player_id:133,team_id:2,state:'graded',grade:5,events:[4],minutes:[77],status:4,presence_odds:100},
+  {player_id:5585,team_id:3,state:'graded',grade:7.1,events:[3,22],minutes:[12,40],status:4,presence_odds:100}],
+ ...extra});
+const importRound=(user,payload)=>asUser(user,'select fm_import_serie_a_round($1::jsonb) as r',[JSON.stringify(payload)]);
+
+test('Serie A rows are read by every member and written by no one directly',async()=>{
+ await importRound(alphaAdmin,serieARound(4));
+ for(const user of [alphaViewer,betaViewer,bothUser])
+  assert.equal((await asUser(user,'select count(*)::int as n from fm_serie_a_grades')).rows[0].n,2,'a member of any league reads the championship');
+ assert.equal((await asUser(stranger,'select count(*)::int as n from fm_serie_a_grades')).rows[0].n,2,'nothing here is league scoped');
+ await assert.rejects(asUser(alphaAdmin,"insert into fm_serie_a_teams values (99,'Direttamente')"),/permission denied/);
+ await assert.rejects(asUser(alphaAdmin,"update fm_serie_a_grades set grade=10"),/permission denied/);
+});
+test('importing a round stores grades, matches, players and teams together',async()=>{
+ const result=(await importRound(alphaAdmin,serieARound(5))).rows[0].r;
+ assert.deepEqual(result,{season:'2026-27',round:5,final:true,grades:2,matches:2});
+ const grade=(await asUser(alphaViewer,"select * from fm_serie_a_grades where round=5 and player_id=5585")).rows[0];
+ assert.equal(Number(grade.grade),7.1);
+ assert.deepEqual(grade.events,[3,22]);
+ assert.deepEqual(grade.minutes,[12,40]);
+ assert.equal((await asUser(alphaViewer,"select name from fm_serie_a_players where id=133")).rows[0].name,'Skorupski');
+ assert.equal((await asUser(alphaViewer,'select count(*)::int as n from fm_serie_a_teams')).rows[0].n,4,'four clubs, read off two matches, each named once');
+ assert.equal((await asUser(alphaViewer,'select final from fm_serie_a_rounds where round=5')).rows[0].final,true);
+});
+test('only an admin of some league may import, whichever league it is',async()=>{
+ await assert.rejects(importRound(alphaViewer,serieARound(6)),/admin_required/);
+ await assert.rejects(importRound(stranger,serieARound(6)),/admin_required/);
+ // Beta's admin is admin of nothing in Serie A, and that is precisely the point: the table
+ // has no owner, so the gate only separates who may write from who may read.
+ assert.equal((await importRound(betaAdmin,serieARound(6))).rows[0].r.round,6);
+});
+test('a round is final only when every one of its matches is over',async()=>{
+ await assert.rejects(importRound(alphaAdmin,{...serieARound(7,false),final:true}),/invalid_final/);
+ await assert.rejects(importRound(alphaAdmin,{...serieARound(7,true),final:false}),/invalid_final/);
+ assert.equal((await importRound(alphaAdmin,serieARound(7,false))).rows[0].r.final,false);
+ assert.equal((await asUser(alphaViewer,'select final from fm_serie_a_rounds where round=7')).rows[0].final,false);
+});
+test('a live round is re-read until it settles, and a settled one is never re-read',async()=>{
+ // Round 7 is still being played: a second reading replaces the first instead of adding to it.
+ const later=serieARound(7,false);
+ later.grades=[{player_id:133,team_id:2,state:'no_vote',grade:null,events:[15],minutes:[81],status:4,presence_odds:100}];
+ assert.equal((await importRound(alphaAdmin,later)).rows[0].r.grades,1);
+ const rows=(await asUser(alphaViewer,'select player_id,state from fm_serie_a_grades where round=7')).rows;
+ assert.deepEqual(rows,[{player_id:133,state:'no_vote'}],'the superseded reading is gone, not kept alongside');
+ // Once every match is over the round is settled, and the feed keeps serving it forever.
+ await importRound(alphaAdmin,serieARound(7,true));
+ await assert.rejects(importRound(alphaAdmin,serieARound(7,true)),/round_already_final/);
+ await assert.rejects(importRound(alphaAdmin,serieARound(7,false)),/round_already_final/);
+});
+test('a grade without a vote is a state, never a zero',async()=>{
+ const bad=(patch)=>importRound(alphaAdmin,{...serieARound(8),grades:[{player_id:133,team_id:2,state:'graded',grade:6,events:[],minutes:[],status:4,...patch}]});
+ await assert.rejects(bad({state:'no_vote'}),/invalid_state/,'no vote with a grade attached');
+ await assert.rejects(bad({state:'graded',grade:null}),/invalid_state/,'graded with no grade');
+ await assert.rejects(bad({state:'boh'}),/invalid_state/);
+ await assert.rejects(bad({events:[4,'x']}),/invalid_events/);
+ await assert.rejects(bad({events:[400]}),/invalid_events/);
+ await assert.rejects(importRound(alphaAdmin,{...serieARound(8),season:'2026-2027'}),/invalid_season/,'the league season format is not this table\'s');
+ await assert.rejects(importRound(alphaAdmin,{...serieARound(8),round:39}),/invalid_round/);
+ await assert.rejects(importRound(alphaAdmin,{...serieARound(8),matches:[]}),/invalid_matches/);
+ await assert.rejects(importRound(alphaAdmin,{...serieARound(8),grades:[]}),/invalid_grades/);
+});
+test('a player carries one identity across the rounds he appears in',async()=>{
+ const moved=serieARound(9);
+ moved.players=[{id:5585,name:'Malen',role:'A',team_id:2}];
+ moved.grades=[{player_id:5585,team_id:2,state:'did_not_play',grade:null,events:[],minutes:[],status:4,presence_odds:0}];
+ await importRound(alphaAdmin,moved);
+ const rows=(await asUser(alphaViewer,'select count(*)::int as n from fm_serie_a_players where id=5585')).rows;
+ assert.equal(rows[0].n,1,'the row is updated, not duplicated per round');
+ assert.equal((await asUser(alphaViewer,'select team_id from fm_serie_a_players where id=5585')).rows[0].team_id,2);
+ const spread=(await asUser(alphaViewer,'select count(*)::int as n,count(distinct round)::int as rounds from fm_serie_a_grades where player_id=5585')).rows[0];
+ assert.equal(spread.n,spread.rounds,'one grade per round, however many rounds he has played');
+});
+
 after(async()=>{await db.close();});

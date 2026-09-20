@@ -46,6 +46,7 @@ Browser ──► Next.js App Router (app/)
               Supabase (Postgres + Auth + RLS)
               fm_leagues / fm_league_teams / fm_memberships = configurazione e scope
               tabelle fm_* con league_id  ·  RPC fm_import_observations / fm_save_review / fm_*_auto_sync
+              fm_serie_a_* = dati di campionato, **senza league_id**, in lettura a ogni utente
                         ▲
                         │  (auto-sync: Supabase REST + chiave SHA-256)
               Connettore Railway (connector/, Node + Playwright)
@@ -283,6 +284,15 @@ superato — la storia git li conserva, il repo no.
   più il primo scaffolding). Sono state riallineate con `supabase migration repair` il
   19/09: da lì in poi `db push` è di nuovo utilizzabile, ma quelle voci restano nella
   tabella e non hanno un file corrispondente.
+- Le tabelle `fm_serie_a_*` sono l'unica eccezione allo scope per lega, ed è voluta: un voto di
+  Modric è della Serie A, non di una lega. Lettura aperta a ogni utente autenticato, scrittura
+  solo via `fm_import_serie_a_round`, che chiede di essere **admin di una lega qualsiasi** —
+  non c'è una lega di cui essere admin. La stagione è nel formato della fonte (`2026-27`), non
+  in quello di `fm_leagues` (`2026-2027`): si traduce al confine, non si mescolano.
+- **Una giornata definitiva non si reimporta**: `round_already_final`. Il feed continua a
+  servire una giornata finita, e reimportarla potrebbe solo sostituire una correzione della
+  redazione con la lettura live che l'aveva preceduta. Finché è in corso, invece, ogni import
+  sostituisce il precedente per intero.
 - Il feed live di Fantacalcio è **dato in diretta, non il verbale della partita**: su ~1400
   giudizi calibrati uno non coincide con la pagina voti (una ammonizione che la redazione ha
   poi tolto). L'ingestione deve reggere quello scarto, non negarlo — e una giornata si
