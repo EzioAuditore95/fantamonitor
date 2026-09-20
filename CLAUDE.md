@@ -76,6 +76,13 @@ Browser ──► Next.js App Router (app/)
     `open()` sta qui solo per tenere il formato in un posto e per il test di andata e
     ritorno: **la web app non deve mai chiamarla con una chiave reale.**
   - `performance.ts` / `lineup-analytics.ts` — calcoli puri, nessun I/O.
+  - `serie-a-events.ts` — vocabolario del feed live pubblico di Fantacalcio (voti sentinella,
+    stato della giornata, codici evento, pesi Classic). **Tabella derivata, non trascritta**:
+    la produce `scripts/calibrate-live.mjs` e la riverifica `tests/serie-a-events.test.mjs`.
+- **`scripts/`** — utilità da riga di comando, fuori dalla build. `calibrate-live.mjs` scarica
+  feed live, pagina voti e pagina statistiche, incrocia le tre fonti e stampa la tabella dei
+  codici con i rispettivi pesi; con `--offline` la ricava dalle fixture in
+  `tests/fixtures/serie-a/` (campione di 5 giornate, non un archivio).
 - **`supabase/migrations/`** — sorgente di verità dello schema. Le RPC leggono i limiti da
   `fm_leagues` e replicano in SQL la validazione fatta in Zod; `lib/league.ts` legge la
   stessa riga tramite `leagueConfigFromRows`.
@@ -276,6 +283,13 @@ superato — la storia git li conserva, il repo no.
   più il primo scaffolding). Sono state riallineate con `supabase migration repair` il
   19/09: da lì in poi `db push` è di nuovo utilizzabile, ma quelle voci restano nella
   tabella e non hanno un file corrispondente.
+- Il feed live di Fantacalcio è **dato in diretta, non il verbale della partita**: su ~1400
+  giudizi calibrati uno non coincide con la pagina voti (una ammonizione che la redazione ha
+  poi tolto). L'ingestione deve reggere quello scarto, non negarlo — e una giornata si
+  considera definitiva solo quando **tutte** le sue partite hanno `sto = 4`, non per orario.
+- Nel feed **non esiste un evento "porta inviolata"**: il clean sheet si deduce dai gol
+  subiti a zero. I codici 11, 12, 16 e 17 sono visti ma non identificati: valgono 0 e
+  `tests/serie-a-events.test.mjs` fallisce se uno di loro inizia a muovere un fantavoto.
 - Dati reali (`lib/data/`, `prototype/data/`) sono fuori dal repo: non ricrearli né
   committare esempi con nomi o risultati veri.
 
