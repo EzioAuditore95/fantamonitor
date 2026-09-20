@@ -7,12 +7,6 @@
   --fm-muted-strong: #c7d2e3;
 }
 
-/* Remove secondary explanatory blocks from the dashboard. */
-.score-aside,
-.method {
-  display: none !important;
-}
-
 /* The scoreboard becomes a single, full-width hero card. */
 .scoreboard {
   display: block !important;
@@ -28,7 +22,6 @@
 .panel-head small,
 .round-countdown__label,
 .round-countdown__date,
-.side-stack p,
 .timeline-row p,
 .fixture span,
 .import-note,
@@ -80,8 +73,7 @@
 .matrix td,
 .matrix th,
 .mobile-history-row,
-.timeline-count,
-.waiting-list button {
+.timeline-count {
   color: var(--fm-text-soft);
 }
 
@@ -91,21 +83,15 @@
 }
 
 .team-name strong,
-.mobile-history-row strong,
-.waiting-list button {
+.mobile-history-row strong {
   color: var(--fm-text) !important;
 }
 
 /* Preserve semantic colors while keeping sufficient luminance. */
 .detail-button,
-.aside-row a,
 .event-box a,
 .timeline-row a {
   color: #8fbcff !important;
-}
-
-.warning-icon {
-  color: #ffc27d !important;
 }
 
 .badge.present {
@@ -167,11 +153,6 @@
 .bottom-bar {
   color: var(--fm-muted) !important;
   border-color: rgba(255,255,255,.09) !important;
-}
-
-/* The remaining warning panel should stay legible as the only side card. */
-.side-stack .panel {
-  color: var(--fm-text-soft);
 }
 
 /* Team detail redesign */
@@ -547,10 +528,6 @@
     width: 180px !important;
     min-width: 180px !important;
     max-width: 180px !important;
-  }
-
-  .monitor-grid {
-    grid-template-columns: minmax(0, 1fr) 280px;
   }
 
   .team-detail { padding: 22px; }
