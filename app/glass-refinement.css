@@ -555,3 +555,24 @@
     display: inline;
   }
 }
+
+/* Il registro delle letture e le evidenze di invio sono diagnostica: restano
+   raggiungibili, ma non occupano lo Storico di chi guarda solo le giornate. */
+.history-log {
+  margin-top: 16px;
+}
+
+.history-log > summary {
+  cursor: pointer;
+  padding: 13px 16px;
+  border: 1px solid var(--fm-line);
+  border-radius: var(--fm-radius);
+  background: var(--fm-glass-soft);
+  color: var(--fm-muted-strong);
+  font-size: .875rem;
+  font-weight: 600;
+}
+
+.history-log[open] > summary {
+  margin-bottom: 14px;
+}
