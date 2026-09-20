@@ -1,6 +1,6 @@
 'use client';
 import { useCallback,useEffect,useState } from 'react';
-import { KeyRound,PlugZap,ShieldCheck,ShieldAlert } from 'lucide-react';
+import { KeyRound,PlugZap } from 'lucide-react';
 import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from '@/components/ui/dialog';
 import { Tabs,TabsList,TabsTrigger,TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
@@ -11,8 +11,8 @@ import type { LeagueConfig } from '@/lib/league';
 type Status={configured?:boolean;hasSession?:boolean;sessionExpiresAt?:string|null;keyVersion?:number;
  updatedAt?:string|null;lastVerifiedAt?:string|null;lastVerifiedStatus?:string|null;encryptionReady?:boolean;currentKeyVersion?:number|null;error?:string};
 
-export default function CredentialsDialog({config,canManage}:{config:LeagueConfig;canManage:boolean}){
-  const [open,setOpen]=useState(false),[status,setStatus]=useState<Status|null>(null);
+export default function CredentialsDialog({config,canManage,open,onOpenChange}:{config:LeagueConfig;canManage:boolean;open:boolean;onOpenChange:(value:boolean)=>void}){
+  const [status,setStatus]=useState<Status|null>(null);
   const [mode,setMode]=useState('session'),[saving,setSaving]=useState(false),[error,setError]=useState(''),[done,setDone]=useState('');
   const [username,setUsername]=useState(''),[password,setPassword]=useState(''),[storageState,setStorageState]=useState('');
   const [checking,setChecking]=useState(false);
@@ -49,11 +49,7 @@ export default function CredentialsDialog({config,canManage}:{config:LeagueConfi
   }
   if(!canManage)return null;
   return <>
-    <button className="credential-chip" onClick={()=>{setOpen(true);setError('');setDone('');}} aria-label="Account Fantacalcio collegato alla lega">
-      {connected?<ShieldCheck size={15}/>:<ShieldAlert size={15}/>}
-      <span>{connected?'Account collegato':'Collega account'}</span>
-    </button>
-    <Dialog open={open} onOpenChange={v=>{if(!saving)setOpen(v)}}><DialogContent className="review-dialog">
+    <Dialog open={open} onOpenChange={v=>{if(!saving)onOpenChange(v)}}><DialogContent className="review-dialog">
       <DialogHeader><DialogTitle>Account Fantacalcio della lega</DialogTitle>
       <DialogDescription>Serve un account amministratore della lega su leghe.fantacalcio.it: il connettore legge la pagina di gestione formazioni, che richiede quel ruolo.</DialogDescription></DialogHeader>
       <div className="credential-state">

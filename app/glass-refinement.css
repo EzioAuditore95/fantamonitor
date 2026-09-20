@@ -557,3 +557,24 @@
   .pitch { min-height: 520px; }
   .roster-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }
 }
+
+/* Gli strumenti da admin vivono nella topbar: sotto i 700 px resta la sola icona,
+   perche' accanto al brand e a "Esci" l'etichetta manderebbe la riga a capo. */
+.topbar-action {
+  min-height: 40px;
+  padding: 0 11px;
+}
+
+.topbar-action-label {
+  display: none;
+}
+
+@media (min-width: 700px) {
+  .topbar-action {
+    padding: 0 14px;
+  }
+
+  .topbar-action-label {
+    display: inline;
+  }
+}

@@ -104,10 +104,6 @@ textarea {
   gap: 8px;
 }
 
-.lock-label {
-  display: none;
-}
-
 .signout-btn {
   min-width: 46px;
   min-height: 40px;
@@ -155,10 +151,6 @@ textarea {
 .season {
   color: var(--fm-muted);
   font-size: .72rem;
-}
-
-.league-mode {
-  display: none;
 }
 
 .round-countdown {
@@ -266,10 +258,6 @@ textarea {
 
 .main-tabs [data-slot=tabs-trigger]:after {
   display: none !important;
-}
-
-.navigation .tools {
-  display: none;
 }
 
 .page-heading {
@@ -753,22 +741,9 @@ h2,
     padding-right: 24px;
   }
 
-  .lock-label {
-    display: flex;
-    color: var(--fm-muted);
-  }
-
   .league-banner {
     grid-template-columns: minmax(0,1fr) auto auto;
     padding-top: 22px;
-  }
-
-  .league-mode {
-    display: inline-flex;
-    color: #b8c8df;
-    border-color: var(--fm-line);
-    border-radius: 999px;
-    background: var(--fm-glass);
   }
 
   .round-countdown {
@@ -878,11 +853,6 @@ h2,
   .main-tabs [data-slot=tabs-trigger] svg {
     width: 17px;
     height: 17px;
-  }
-
-  .navigation .tools {
-    display: flex;
-    padding: 0;
   }
 
   .score-main {
