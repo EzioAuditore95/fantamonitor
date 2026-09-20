@@ -25,7 +25,7 @@ export default function AnalyticsView({config}:{config:LeagueConfig}){
   const deepest=[...withData].sort((a,b)=>b.uniqueStarters-a.uniqueStarters)[0];
 
   return <div className="app-shell"><header className="topbar"><a href={base} className="brand"><span className="brand-mark">FM</span>FANTAMONITOR</a><div style={{display:'flex',gap:8}}><a href={`${base}/stats`} className="btn"><BarChart3/>Statistiche</a><a href={base} className="btn"><ArrowLeft/>Dashboard</a></div></header><main className={styles.main}>
-    <div className="page-heading"><div><div className="eyebrow">Fase 3 · analisi formazioni</div><h1>Scelte & continuità</h1><div className="sync-note">Moduli, rotazioni e gerarchie ricavate dagli snapshot reali della lega</div></div></div>
+    <div className="page-heading"><div><div className="eyebrow">{String(cfg.rules.season_label??cfg.season)}</div><h1>Scelte & continuità</h1><div className="sync-note">Moduli, rotazioni e gerarchie ricavate dagli snapshot reali della lega</div></div></div>
     {loading&&<section className="panel"><p>Calcolo analisi…</p></section>}
     {error&&<div role="alert" className="error-banner"><TriangleAlert size={20}/><span>{error}</span></div>}
     {!loading&&!error&&<>
