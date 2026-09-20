@@ -104,10 +104,6 @@ textarea {
   gap: 8px;
 }
 
-.lock-label {
-  display: none;
-}
-
 .signout-btn {
   min-width: 46px;
   min-height: 40px;
@@ -155,10 +151,6 @@ textarea {
 .season {
   color: var(--fm-muted);
   font-size: .72rem;
-}
-
-.league-mode {
-  display: none;
 }
 
 .round-countdown {
@@ -268,10 +260,6 @@ textarea {
   display: none !important;
 }
 
-.navigation .tools {
-  display: none;
-}
-
 .page-heading {
   align-items: flex-start;
   gap: 12px;
@@ -336,7 +324,6 @@ textarea {
 }
 
 .score-main,
-.score-aside,
 .panel,
 .penalty-summary,
 .blank-panel {
@@ -426,36 +413,11 @@ textarea {
   background: rgba(255,255,255,.16);
 }
 
-.score-aside {
-  margin-top: 10px;
-  padding: 8px 6px;
-  box-shadow: none !important;
-  background: transparent !important;
-  border-color: transparent !important;
-}
-
-.aside-row {
-  gap: 11px;
-  padding: 11px 8px;
-  border-bottom: 1px solid rgba(255,255,255,.075);
-}
-
-.aside-row:last-child {
-  border-bottom: 0;
-}
-
-.aside-row > svg {
-  color: var(--fm-blue);
-}
-
-.aside-row strong,
 h2,
 .panel-head h2 {
   color: var(--fm-text);
 }
 
-.aside-row p,
-.side-stack p,
 .footnote,
 .panel-head small {
   color: var(--fm-muted);
@@ -603,29 +565,7 @@ h2,
   border-color: rgba(255,255,255,.08);
 }
 
-.side-stack {
-  gap: 14px;
-}
-
-.side-stack .panel {
-  padding: 17px;
-}
-
-.side-stack .panel:first-child,
-.method {
-  border: 1px solid var(--fm-line) !important;
-}
-
-.waiting-list li {
-  border-color: rgba(255,255,255,.075);
-}
-
-.warning-icon {
-  color: var(--fm-orange);
-}
-
-.detail-button,
-.aside-row a {
+.detail-button {
   color: var(--fm-blue);
 }
 
@@ -753,22 +693,9 @@ h2,
     padding-right: 24px;
   }
 
-  .lock-label {
-    display: flex;
-    color: var(--fm-muted);
-  }
-
   .league-banner {
     grid-template-columns: minmax(0,1fr) auto auto;
     padding-top: 22px;
-  }
-
-  .league-mode {
-    display: inline-flex;
-    color: #b8c8df;
-    border-color: var(--fm-line);
-    border-radius: 999px;
-    background: var(--fm-glass);
   }
 
   .round-countdown {
@@ -784,18 +711,6 @@ h2,
     display: grid;
     grid-template-columns: minmax(0,1.12fr) minmax(290px,.88fr);
     gap: 12px;
-  }
-
-  .score-aside {
-    margin: 0;
-    padding: 10px 12px;
-    border: 1px solid var(--fm-line) !important;
-    background: linear-gradient(145deg, var(--fm-glass), var(--fm-glass-soft)) !important;
-  }
-
-  .monitor-grid {
-    display: grid;
-    grid-template-columns: minmax(0,1fr) 280px;
   }
 
   .team-table thead {
@@ -878,11 +793,6 @@ h2,
   .main-tabs [data-slot=tabs-trigger] svg {
     width: 17px;
     height: 17px;
-  }
-
-  .navigation .tools {
-    display: flex;
-    padding: 0;
   }
 
   .score-main {
