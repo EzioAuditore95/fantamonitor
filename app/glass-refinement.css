@@ -576,3 +576,16 @@
 .history-log[open] > summary {
   margin-bottom: 14px;
 }
+
+/* Le statistiche aprono su classifica, forma e andamento; record e primati
+   restano un passo sotto, per chi li cerca. */
+.stats-more > summary {
+  cursor: pointer;
+  padding: 13px 16px;
+  border: 1px solid var(--fm-line);
+  border-radius: var(--fm-radius);
+  background: var(--fm-glass-soft);
+  color: var(--fm-muted-strong);
+  font-size: .875rem;
+  font-weight: 600;
+}
