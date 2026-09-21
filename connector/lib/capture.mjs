@@ -101,6 +101,12 @@ export async function capture(league,round){
     let payload;try{payload=enrichLineup(await response.json());}catch{throw new Error('connector_lineup_invalid_json');}
     return {team,dto:payload?.teamLineupDto??null};
   }));
+  // Temporaneo, ultima verifica: `lucnt` era 0 per tutte e dieci le squadre anche dove l'API
+  // restituiva undici nomi — e la pagina di Fantacalcio, nello stesso momento, diceva
+  // "Non inserita" per tutte e dieci. Se è il contatore dei salvataggi di questa giornata,
+  // deve passare a >0 appena qualcuno inserisce davvero. È quello che questa riga misura.
+  for(const {team,dto} of items)if(dto)console.info('lineup_counter',JSON.stringify({round,team:team.id,
+    lucnt:dto.lucnt,starts:Array.isArray(dto.starts)?dto.starts.length:null,mdl:dto.mdl,visb:dto.visb}));
   const teamsData=items.map(x=>toTeamStatus(x,round));
   if(teamsData.length!==league.teams.length)throw new Error('connector_incomplete_teams');
   const snapshot=snapshotFor(league,round,teamsData);
