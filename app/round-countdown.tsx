@@ -2,27 +2,11 @@
 import { useEffect,useMemo,useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Clock3 } from 'lucide-react';
-import type { LeagueConfig } from '@/lib/league';
+import { formatKickoff,formatRemaining,nextKickoff } from '@/lib/round-schedule';
+import { useRoundSchedule } from '@/app/round-schedule-provider';
 
-type ScheduleRow={round:number;serie_a_round:number;start_at:string|null;source:string;source_url:string|null;updated_at:string};
-type ScheduleResponse={schedule?:ScheduleRow[];error?:string};
-
-function formatRemaining(ms:number){
-  const total=Math.max(0,Math.floor(ms/1000));
-  const days=Math.floor(total/86400);
-  const hours=Math.floor((total%86400)/3600);
-  const minutes=Math.floor((total%3600)/60);
-  const seconds=total%60;
-  if(days>0)return `${days}g ${String(hours).padStart(2,'0')}h ${String(minutes).padStart(2,'0')}m ${String(seconds).padStart(2,'0')}s`;
-  return `${String(hours).padStart(2,'0')}h ${String(minutes).padStart(2,'0')}m ${String(seconds).padStart(2,'0')}s`;
-}
-
-function formatKickoff(value:string){
-  return new Intl.DateTimeFormat('it-IT',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'Europe/Rome'}).format(new Date(value));
-}
-
-export default function RoundCountdown({config}:{config:LeagueConfig}){
-  const [rows,setRows]=useState<ScheduleRow[]>([]);
+export default function RoundCountdown(){
+  const {rows}=useRoundSchedule();
   const [now,setNow]=useState(()=>Date.now());
   const [target,setTarget]=useState<Element|null>(null);
   useEffect(()=>{
@@ -30,12 +14,13 @@ export default function RoundCountdown({config}:{config:LeagueConfig}){
     // make the server and client markup disagree.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setTarget(document.querySelector('.league-banner'));
-    let active=true;
-    fetch(`/api/schedule?league=${encodeURIComponent(config.slug)}`,{cache:'no-store'}).then(async r=>{const body=await r.json() as ScheduleResponse;if(active&&r.ok)setRows(body.schedule??[]);}).catch(()=>{});
+    // The banner shows seconds, so this one ticks every second. It is the only such timer
+    // on the page: a tick inside Dashboard would re-render the teams table and the 350
+    // buttons of the history matrix along with it.
     const tick=setInterval(()=>setNow(Date.now()),1000);
-    return()=>{active=false;clearInterval(tick)};
-  },[config.slug]);
-  const next=useMemo(()=>rows.filter(r=>r.start_at&&Date.parse(r.start_at)>now).sort((a,b)=>Date.parse(a.start_at!)-Date.parse(b.start_at!))[0]??null,[rows,now]);
+    return()=>clearInterval(tick);
+  },[]);
+  const next=useMemo(()=>nextKickoff(rows,now),[rows,now]);
   if(!target||!next?.start_at)return null;
   const remaining=Date.parse(next.start_at)-now;
   return createPortal(<div className="round-countdown" title={`Serie A ${next.serie_a_round}ª giornata · ${formatKickoff(next.start_at)}`}>
