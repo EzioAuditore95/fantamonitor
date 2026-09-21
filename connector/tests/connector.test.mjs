@@ -47,9 +47,20 @@ test('the snapshot takes its scope from the league, never from a constant',()=>{
 
 test('a lineup payload belonging to another team or round is refused',()=>{
  const team={name:'Uno',id:42,meta:undefined};
- assert.equal(toTeamStatus({team,dto:{tid:42,mday:5,ldate:'2026-09-01'}},5).present,true);
+ // Una formazione sono undici nomi, non una data: Fantacalcio risponde con un record e un
+ // `ldate` anche per una giornata che nessuno ha aperto.
+ const eleven=Array.from({length:11},(_,i)=>({pid:i+1,plyr:`G${i+1}`,role:'C'}));
+ const lineup=(n,extra={})=>({tid:42,mday:5,ldate:'2026-09-01',mdl:'433',
+  starts:Array.from({length:n},(_,i)=>i+1),bench:[],
+  startersPlayers:Array.from({length:n},(_,i)=>({id:i+1,name:`G${i+1}`,role:'C'})),
+  rosterPlayers:eleven.map((p,i)=>({id:i+1,name:`G${i+1}`,role:'C'})),...extra});
+ assert.equal(toTeamStatus({team,dto:lineup(11)},5).present,true);
+ assert.equal(toTeamStatus({team,dto:lineup(10)},5).present,false,'dieci titolari non sono una formazione');
+ assert.equal(toTeamStatus({team,dto:{tid:42,mday:5,ldate:'2026-09-01'}},5).present,false,'una data senza giocatori non è un inserimento');
  assert.equal(toTeamStatus({team,dto:{tid:42,mday:5,ldate:''}},5).present,false);
  assert.equal(toTeamStatus({team,dto:null},5).present,false);
+ assert.equal(toTeamStatus({team,dto:lineup(11)},5).lineup_saved_at,'2026-09-01','la data resta, per poter distinguere il riporto automatico');
+ assert.equal(toTeamStatus({team,dto:null},5).lineup_saved_at,undefined);
  assert.throws(()=>toTeamStatus({team,dto:{tid:43,mday:5}},5),/team_mismatch/);
  assert.throws(()=>toTeamStatus({team,dto:{tid:42,mday:6}},5),/round_mismatch/);
  assert.throws(()=>toTeamStatus({team,dto:'non-un-oggetto'},5),/invalid_payload/);

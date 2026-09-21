@@ -327,6 +327,13 @@ superato — la storia git li conserva, il repo no.
 - Nei cancelli in PL/pgSQL **coalescere sempre l'autorizzatore**: `if not (null or false)` non
   solleva niente e lascia passare. È successo davvero, con uno stub di test che restituiva NULL
   al posto di false; ora c'è un test che installa un autorizzatore NULL e pretende il rifiuto.
+- **Una formazione sono undici nomi, non una data.** `apileague` risponde con un record — `ldate`
+  compreso — per ogni squadra di ogni giornata, anche una che nessuno ha aperto: la giornata 3
+  risultava 10/10 inserite, e tre di quelle squadre non avevano nemmeno un giocatore. `present`
+  ora richiede almeno 11 titolari. **Resta aperto il secondo pezzo**: le altre sette avevano gli
+  stessi identici undici della giornata 2, cioè il riporto automatico della piattaforma, non una
+  scelta. Per distinguerli lo snapshot conserva `lineup_saved_at` (da `dto.ldate`): serve una
+  cattura per vedere cosa contiene davvero prima di scrivere quella regola. Non indovinarla.
 - Il feed pubblica il **calendario di una giornata prima che la si giochi**: dieci partite con
   `sto = 0` e la lista giocatori **vuota**. Non è un errore, è il futuro — `roundHasStarted`
   chiude lì la passata. Prima della correzione la RPC rifiutava (`invalid_grades`, giustamente)

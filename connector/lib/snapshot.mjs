@@ -3,6 +3,7 @@
 import { extractFormation,metaNumber,metaString,metaUrl } from './fantacalcio.mjs';
 
 const ORIGIN='https://leghe.fantacalcio.it';
+const STARTERS=11;
 export const manageLineupsUrl=(league,round)=>`${ORIGIN}/${league.slug}/view/competition/${league.competitionId}/manage-lineups/${round}`;
 export const dashboardUrl=league=>`${ORIGIN}/${league.slug}/view/competition/${league.competitionId}/dashboard`;
 export function toTeamStatus(item,round){
@@ -10,19 +11,25 @@ export function toTeamStatus(item,round){
   if(dto!=null&&typeof dto!=='object')throw new Error('connector_lineup_invalid_payload');
   if(dto&&Number(dto.tid)!==item.team.id)throw new Error('connector_lineup_team_mismatch');
   if(dto&&Number(dto.mday)!==round)throw new Error('connector_lineup_round_mismatch');
-  const present=Boolean(dto&&Number(dto.mday)===round&&typeof dto.ldate==='string'&&dto.ldate.length>0);
+  const formation=extractFormation(dto);
+  // A lineup is eleven names, not a date. Fantacalcio answers with a record — `ldate` included —
+  // for every team of every round, even one nobody has opened: on league round 3 that reported
+  // ten teams out of ten as done, three of which had no players at all.
+  const present=Boolean(dto&&Number(dto.mday)===round&&(formation?.starters?.length??0)>=STARTERS);
   const meta=item.team.meta;
   const manager=metaString(meta,/(manager|owner|president|presidente|username|userName|coach)/i);
   const budget=metaNumber(meta,/(budget|credit|crediti|remainingCredits|fcredit)/i);
   const crest=metaUrl(meta,/(crest|logo|stemma|badge)/i);
   const kit=metaUrl(meta,/(kit|shirt|maglia|jersey)/i);
-  const formation=extractFormation(dto);
   const result={team_key:item.team.name,name:item.team.name,present,source_status:present?'check-circle':'Non inserita',team_id:item.team.id};
   if(manager)result.manager=manager;
   if(budget!==undefined)result.budget=budget;
   if(crest)result.crest_url=crest;
   if(kit)result.kit_url=kit;
   if(formation)result.formation=formation;
+  // Kept so the next question can be answered with data instead of a guess: whether these
+  // eleven are this round's choice or last round's, carried over by the platform.
+  if(typeof dto?.ldate==='string'&&dto.ldate)result.lineup_saved_at=dto.ldate;
   return result;
 }
 
