@@ -126,7 +126,20 @@ button:focus-visible,a:focus-visible { outline:3px solid var(--brand-orange); ou
 .score-number strong { font-weight:700; color:#fff }
 .score-number span { font-size:2.5rem; color:#b6cce6; font-weight:400; letter-spacing:-.03em; margin-left:12px }
 .score-caption { margin:0; font-size:1rem; color:#e5eef9 }
-.team-bars { display:grid; grid-template-columns:repeat(10,minmax(0,1fr)); gap:6px; margin-top:19px } /* fallback: la dashboard imposta le colonne dal numero di squadre */
+/* One column per team: the dashboard passes the count as --teams, so a media query can still
+   override the layout — an inline grid-template-columns could not be overridden at all. */
+.team-bars { display:grid; grid-template-columns:repeat(var(--teams,10),minmax(0,1fr)); gap:6px; margin-top:19px }
+/* The bar alone said the state but not whose: the crest and the name go underneath, so a team
+   is recognised without hovering — which on a phone does not exist. */
+.team-chip { display:grid; gap:6px; justify-items:center; min-width:0; padding:0; border:0; background:none; cursor:pointer; color:inherit }
+.team-chip .team-bar { display:block; width:100% }
+.team-chip .crest { width:28px; height:31px; font-size:.625rem; margin:0 }
+.team-chip-name { max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:.6875rem; line-height:1.25 }
+/* The chip is the touch target now, so the bar no longer needs the invisible pad that made a
+   7px line tappable — left in place it would sit over the crest for no reason. */
+.team-chip .team-bar:before { content:none }
+/* Ten columns on a phone leave thirty pixels each: the crest fits and the name does not. */
+@media(max-width:760px) { .team-bars { grid-template-columns:repeat(5,minmax(0,1fr)); row-gap:14px } }
 .team-bar { height:14px; border-radius:2px; background:#315fb6; border:1px solid #9db4d0; padding:0 }
 .team-bar.present { background:#fff; border-color:#fff }
 .legend { display:flex; gap:18px; flex-wrap:wrap; font-size:.8125rem; color:var(--muted-foreground); margin-top:12px }
