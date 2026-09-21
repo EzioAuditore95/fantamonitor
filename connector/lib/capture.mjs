@@ -69,6 +69,13 @@ async function gather(league,round){
       if(!teamsPayload)throw new Error('connector_team_list_missing');
       const found=new Map();
       for(const item of findTeamObjects(teamsPayload))if(!found.has(item.name))found.set(item.name,item);
+      // Temporaneo. La pagina fa una sola chiamata `visualizza` — la squadra dell'admin — ma
+      // disegna il badge per tutte e dieci: lo stato deve arrivare da questa lista, che il
+      // connettore scarica già. Qui si guardano i campi scalari, una riga per squadra.
+      for(const item of found.values()){
+        const scalars=Object.fromEntries(Object.entries(item.raw??{}).filter(([,v])=>v===null||['string','number','boolean'].includes(typeof v)));
+        console.info('team_row_shape',JSON.stringify({round,team:item.id,scalars}));
+      }
       const roster=league.teams.map(name=>{const item=found.get(name);return {name,id:item?.id,meta:item?.raw?enrichTeam(item.raw):undefined};});
       if(roster.some(t=>!Number.isInteger(t.id)))throw new Error('connector_team_mapping_failed');
       const captured=await request.allHeaders();
