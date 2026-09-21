@@ -13,11 +13,11 @@ import { Sheet,SheetContent } from '@/components/ui/sheet';
 import { DropdownMenu,DropdownMenuContent,DropdownMenuItem,DropdownMenuSeparator,DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Empty,EmptyHeader,EmptyTitle,EmptyDescription } from '@/components/ui/empty';
-import { initials,displayDate,latestByRound,type Archive } from '@/lib/model';
-import { teamColor,teamNames,type LeagueConfig } from '@/lib/league';
+import { displayDate,latestByRound,type Archive } from '@/lib/model';
+import { teamNames,type LeagueConfig } from '@/lib/league';
+import Crest from './crest';
 import { monitoredRound } from '@/lib/serie-a';
 
-function Crest({cfg,name,url}:{cfg:LeagueConfig;name:string;url?:string}){return <span className="crest" style={{backgroundColor:teamColor(cfg,name),overflow:'hidden'}} aria-hidden="true">{url?<img src={url} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/>:initials(name)}</span>}
 function Status({present}:{present:boolean|undefined}){return <span className={'badge '+(present===undefined?'unknown':present?'present':'absent')}>{present===undefined?<Info/>:present?<CheckCircle2/>:<Clock3/>}{present===undefined?'Nessuna lettura':present?'Inserita':'Non inserita'}</span>}
 function Blank({title,description}:{title:string;description:string}){return <Empty className="blank-panel"><EmptyHeader><EmptyTitle>{title}</EmptyTitle><EmptyDescription>{description}</EmptyDescription></EmptyHeader></Empty>}
 
