@@ -39,7 +39,8 @@ Browser ──► Next.js App Router (app/)
              ├─ proxy.ts            middleware Next 16: rinnova i cookie Supabase
              ├─ app/auth.ts         getAppUser() · requireLeagueMember(slug)
              ├─ app/l/[slug]/*      dashboard, stats, lineup-analytics della lega
-             ├─ app/api/*/route.ts  archive · reviews · sync · schedule · performance · auth/logout
+             ├─ app/api/*/route.ts  archive · reviews · sync · schedule · performance ·
+             │                     serie-a/sync · auth/logout
              └─ lib/*               modello Zod, regole penalità, calcoli, client Supabase
                         │
                         ▼
@@ -80,6 +81,10 @@ Browser ──► Next.js App Router (app/)
   - `serie-a-events.ts` — vocabolario del feed live pubblico di Fantacalcio (voti sentinella,
     stato della giornata, codici evento, pesi Classic). **Tabella derivata, non trascritta**:
     la produce `scripts/calibrate-live.mjs` e la riverifica `tests/serie-a-events.test.mjs`.
+  - `serie-a.ts` — lettura pura del feed: Zod (**non** `.strict()`, è un documento altrui),
+    conversione stagione `2026-2027` ⇄ `2026-27`, giornate ancora da chiedere.
+  - `serie-a-store.ts` — l'unico I/O della feature: scarica il bucket pubblico e chiama
+    `fm_import_serie_a_round`. Niente credenziali, niente connettore, niente Playwright.
 - **`scripts/`** — utilità da riga di comando, fuori dalla build. `calibrate-live.mjs` scarica
   feed live, pagina voti e pagina statistiche, incrocia le tre fonti e stampa la tabella dei
   codici con i rispettivi pesi; con `--offline` la ricava dalle fixture in

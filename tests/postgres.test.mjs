@@ -6,6 +6,7 @@ import {pgcrypto} from '@electric-sql/pglite/contrib/pgcrypto';
 import {makeSnapshotSchema} from '../lib/model.ts';
 import {makeReviewInputSchema} from '../lib/penalties.ts';
 import {CHEFANTAVITAE10,leagueConfigFromRows,periodForRound,teamNames} from '../lib/league.ts';
+import {parseLiveRound} from '../lib/serie-a.ts';
 const bootstrap=`create schema extensions; create extension pgcrypto with schema extensions;
 create role anon; create role authenticated; create role service_role bypassrls;
 create schema auth;create table auth.users(id uuid primary key);
@@ -550,6 +551,22 @@ test('a player carries one identity across the rounds he appears in',async()=>{
  assert.equal((await asUser(alphaViewer,'select team_id from fm_serie_a_players where id=5585')).rows[0].team_id,2);
  const spread=(await asUser(alphaViewer,'select count(*)::int as n,count(distinct round)::int as rounds from fm_serie_a_grades where player_id=5585')).rows[0];
  assert.equal(spread.n,spread.rounds,'one grade per round, however many rounds he has played');
+});
+
+test('a real round from the feed is accepted exactly as the parser hands it over',async()=>{
+ // The one place where the two halves of this feature meet: what lib/serie-a.ts produces from a
+ // captured feed has to satisfy every constraint the migration declares, with nothing in between.
+ const raw=JSON.parse(await readFile(new URL('./fixtures/serie-a/live-1.json',import.meta.url),'utf8'));
+ const payload=parseLiveRound(raw,'2026-27',20);
+ const result=(await asUser(alphaAdmin,'select fm_import_serie_a_round($1::jsonb) as r',[JSON.stringify(payload)])).rows[0].r;
+ assert.deepEqual(result,{season:'2026-27',round:20,final:true,grades:549,matches:10});
+ assert.equal((await asUser(alphaViewer,'select count(*)::int as n from fm_serie_a_grades where round=20')).rows[0].n,549);
+ assert.equal((await asUser(alphaViewer,'select count(distinct team_id)::int as n from fm_serie_a_grades where round=20')).rows[0].n,20);
+ const keeper=(await asUser(alphaViewer,'select * from fm_serie_a_grades where round=20 and player_id=133')).rows[0];
+ assert.equal(Number(keeper.grade),6);
+ assert.deepEqual(keeper.events,[4]);
+ const unrated=(await asUser(alphaViewer,"select count(*)::int as n from fm_serie_a_grades where round=20 and state='no_vote' and grade is null")).rows[0].n;
+ assert.equal(unrated,26,'players who came on too late are stored as a state, and the check constraint accepts them');
 });
 
 after(async()=>{await db.close();});
