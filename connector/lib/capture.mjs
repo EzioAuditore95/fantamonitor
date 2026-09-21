@@ -58,6 +58,8 @@ async function gather(league,round){
       if(!teamsPayload)throw new Error('connector_team_list_missing');
       const found=new Map();
       for(const item of findTeamObjects(teamsPayload))if(!found.has(item.name))found.set(item.name,item);
+      const roster=league.teams.map(name=>{const item=found.get(name);return {name,id:item?.id,meta:item?.raw?enrichTeam(item.raw):undefined};});
+      if(roster.some(t=>!Number.isInteger(t.id)))throw new Error('connector_team_mapping_failed');
       const captured=await request.allHeaders();
       const headers={};
       for(const [k,v] of Object.entries(captured)){const l=k.toLowerCase();
