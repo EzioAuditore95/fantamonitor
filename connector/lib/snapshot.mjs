@@ -12,10 +12,16 @@ export function toTeamStatus(item,round){
   if(dto&&Number(dto.tid)!==item.team.id)throw new Error('connector_lineup_team_mismatch');
   if(dto&&Number(dto.mday)!==round)throw new Error('connector_lineup_round_mismatch');
   const formation=extractFormation(dto);
-  // A lineup is eleven names, not a date. Fantacalcio answers with a record — `ldate` included —
-  // for every team of every round, even one nobody has opened: on league round 3 that reported
-  // ten teams out of ten as done, three of which had no players at all.
-  const present=Boolean(dto&&Number(dto.mday)===round&&(formation?.starters?.length??0)>=STARTERS);
+  // `lucnt` conta i salvataggi della formazione di quella giornata, ed è l'unico campo che
+  // distingue una scelta da un riporto automatico: provato il 21/09 sulla giornata 3, dove
+  // l'utente ha inserito la propria formazione e il contatore è passato a 1 solo per lui,
+  // mentre altre sei squadre avevano undici nomi e modulo — ereditati dalla giornata 2 — con
+  // il contatore a zero. Undici nomi non bastano: Fantacalcio li restituisce comunque.
+  const saves=Number(dto?.lucnt);
+  // Se il campo sparisse dall'API si torna a contare i nomi: una sovrastima è meno dannosa di
+  // un "non inserita" per l'intera lega, che qui significherebbe penali inventate.
+  const present=Boolean(dto&&Number(dto.mday)===round
+    &&(Number.isFinite(saves)?saves>0:(formation?.starters?.length??0)>=STARTERS));
   const meta=item.team.meta;
   const manager=metaString(meta,/(manager|owner|president|presidente|username|userName|coach)/i);
   const budget=metaNumber(meta,/(budget|credit|crediti|remainingCredits|fcredit)/i);

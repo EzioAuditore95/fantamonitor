@@ -332,6 +332,16 @@ superato — la storia git li conserva, il repo no.
 - Nei cancelli in PL/pgSQL **coalescere sempre l'autorizzatore**: `if not (null or false)` non
   solleva niente e lascia passare. È successo davvero, con uno stub di test che restituiva NULL
   al posto di false; ora c'è un test che installa un autorizzatore NULL e pretende il rifiuto.
+- **«Formazione inserita» è `lucnt > 0`, non undici nomi.** `lucnt` conta i salvataggi di quella
+  giornata ed è l'unico campo che distingue una scelta del manager da un riporto automatico:
+  provato il 21/09 sulla giornata 3, dove inserendo una sola formazione il contatore è passato a
+  1 **solo** per quella squadra, mentre altre sei avevano undici nomi e modulo ereditati dalla
+  giornata 2 con il contatore a zero. Se il campo sparisse si ricade sul conteggio dei nomi:
+  una sovrastima è meno dannosa di un "non inserita" per tutta la lega, che qui sono penali.
+- Quello che **non** distingue nulla, verificato e scartato: `ldate` (è l'istante della
+  risposta), `capt`, `st`/`bm`/`cr` della lista squadre, e la mappa degli endpoint dell'app
+  Angular, che non ha nessuna lista di stato per giornata — la pagina fa **una sola**
+  `teamLineup/visualizza`, quella della squadra dell'admin.
 - **Una formazione sono undici nomi, non una data.** `apileague` risponde con un record — `ldate`
   compreso — per ogni squadra di ogni giornata, anche una che nessuno ha aperto: la giornata 3
   risultava 10/10 inserite, e tre di quelle squadre non avevano nemmeno un giocatore. `present`

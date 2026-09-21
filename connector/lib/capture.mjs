@@ -45,18 +45,7 @@ async function gather(league,round){
   return withLeagueContext(league.id,creds.sessionState,async context=>{
     const page=await context.newPage();
     let teamsPayload=null;
-    // Temporaneo: la pagina mostra "Non inserita" per squadre che l'API dà con undici nomi,
-    // quindi quello stato lo prende da una chiamata che non conosciamo. Qui si annota che cosa
-    // chiede davvero la pagina — solo URL, nessun corpo. Da togliere appena trovata la fonte.
-    const seenUrls=new Set();
-    const listener=async response=>{
-      const url=response.url();
-      if(/apileague[.]fantacalcio[.]it|leghe[.]fantacalcio[.]it\/servizi/.test(url)&&!/\.(js|css|png|jpg|webp|svg|woff2?)(\?|$)/.test(url)){
-        const key=url.replace(/\d{5,}/g,'{id}');
-        if(!seenUrls.has(key)){seenUrls.add(key);console.info('page_xhr',{round,status:response.status(),url:key});}
-      }
-      if(/\/onboarding\/v1\/league\/competition\/teams/.test(url)&&response.status()===200){try{teamsPayload=await response.json();}catch{}}
-    };
+    const listener=async response=>{if(/\/onboarding\/v1\/league\/competition\/teams/.test(response.url())&&response.status()===200){try{teamsPayload=await response.json();}catch{}}};
     page.on('response',listener);
     try{
       const cdp=await page.context().newCDPSession(page);
@@ -69,15 +58,6 @@ async function gather(league,round){
       if(!teamsPayload)throw new Error('connector_team_list_missing');
       const found=new Map();
       for(const item of findTeamObjects(teamsPayload))if(!found.has(item.name))found.set(item.name,item);
-      // Temporaneo. La pagina fa una sola chiamata `visualizza` — la squadra dell'admin — ma
-      // disegna il badge per tutte e dieci: lo stato deve arrivare da questa lista, che il
-      // connettore scarica già. Qui si guardano i campi scalari, una riga per squadra.
-      for(const item of found.values()){
-        const scalars=Object.fromEntries(Object.entries(item.raw??{}).filter(([,v])=>v===null||['string','number','boolean'].includes(typeof v)));
-        console.info('team_row_shape',JSON.stringify({round,team:item.id,scalars}));
-      }
-      const roster=league.teams.map(name=>{const item=found.get(name);return {name,id:item?.id,meta:item?.raw?enrichTeam(item.raw):undefined};});
-      if(roster.some(t=>!Number.isInteger(t.id)))throw new Error('connector_team_mapping_failed');
       const captured=await request.allHeaders();
       const headers={};
       for(const [k,v] of Object.entries(captured)){const l=k.toLowerCase();
@@ -101,12 +81,6 @@ export async function capture(league,round){
     let payload;try{payload=enrichLineup(await response.json());}catch{throw new Error('connector_lineup_invalid_json');}
     return {team,dto:payload?.teamLineupDto??null};
   }));
-  // Temporaneo, ultima verifica: `lucnt` era 0 per tutte e dieci le squadre anche dove l'API
-  // restituiva undici nomi — e la pagina di Fantacalcio, nello stesso momento, diceva
-  // "Non inserita" per tutte e dieci. Se è il contatore dei salvataggi di questa giornata,
-  // deve passare a >0 appena qualcuno inserisce davvero. È quello che questa riga misura.
-  for(const {team,dto} of items)if(dto)console.info('lineup_counter',JSON.stringify({round,team:team.id,
-    lucnt:dto.lucnt,starts:Array.isArray(dto.starts)?dto.starts.length:null,mdl:dto.mdl,visb:dto.visb}));
   const teamsData=items.map(x=>toTeamStatus(x,round));
   if(teamsData.length!==league.teams.length)throw new Error('connector_incomplete_teams');
   const snapshot=snapshotFor(league,round,teamsData);

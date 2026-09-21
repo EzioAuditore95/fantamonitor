@@ -54,7 +54,15 @@ test('a lineup payload belonging to another team or round is refused',()=>{
   starts:Array.from({length:n},(_,i)=>i+1),bench:[],
   startersPlayers:Array.from({length:n},(_,i)=>({id:i+1,name:`G${i+1}`,role:'C'})),
   rosterPlayers:eleven.map((p,i)=>({id:i+1,name:`G${i+1}`,role:'C'})),...extra});
- assert.equal(toTeamStatus({team,dto:lineup(11)},5).present,true);
+ // `lucnt` conta i salvataggi di quella giornata: è ciò che distingue una formazione scelta da
+ // una riportata in automatico, che Fantacalcio restituisce comunque con undici nomi e modulo.
+ assert.equal(toTeamStatus({team,dto:lineup(11,{lucnt:1})},5).present,true,'salvata dal manager');
+ assert.equal(toTeamStatus({team,dto:lineup(11,{lucnt:0})},5).present,false,'undici nomi ereditati dalla giornata prima non sono un inserimento');
+ assert.equal(toTeamStatus({team,dto:lineup(0,{lucnt:0})},5).present,false);
+ assert.equal(toTeamStatus({team,dto:lineup(11,{lucnt:3})},5).present,true);
+ // Se il campo sparisse dall'API si torna a contare i nomi: meglio sovrastimare che dire
+ // "non inserita" a tutta la lega, che qui vorrebbe dire penali inventate.
+ assert.equal(toTeamStatus({team,dto:lineup(11)},5).present,true,'senza lucnt si ricade sugli undici nomi');
  assert.equal(toTeamStatus({team,dto:lineup(10)},5).present,false,'dieci titolari non sono una formazione');
  assert.equal(toTeamStatus({team,dto:{tid:42,mday:5,ldate:'2026-09-01'}},5).present,false,'una data senza giocatori non è un inserimento');
  assert.equal(toTeamStatus({team,dto:{tid:42,mday:5,ldate:''}},5).present,false);
