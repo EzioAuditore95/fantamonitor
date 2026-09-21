@@ -27,9 +27,6 @@ export function toTeamStatus(item,round){
   if(crest)result.crest_url=crest;
   if(kit)result.kit_url=kit;
   if(formation)result.formation=formation;
-  // Kept so the next question can be answered with data instead of a guess: whether these
-  // eleven are this round's choice or last round's, carried over by the platform.
-  if(typeof dto?.ldate==='string'&&dto.ldate)result.lineup_saved_at=dto.ldate;
   return result;
 }
 

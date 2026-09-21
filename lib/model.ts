@@ -23,9 +23,6 @@ const teamSchema=z.object({
   crest_url:z.string().optional(),
   kit_url:z.string().optional(),
   formation:formationSchema.optional(),
-  // Quando la piattaforma dice di aver salvato quella formazione. Serve a distinguere una
-  // scelta di questa giornata da quella riportata in automatico dalla precedente.
-  lineup_saved_at:z.string().optional(),
 }).strict();
 
 const competitionMatchSchema=z.object({

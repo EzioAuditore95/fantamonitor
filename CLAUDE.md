@@ -332,8 +332,15 @@ superato — la storia git li conserva, il repo no.
   risultava 10/10 inserite, e tre di quelle squadre non avevano nemmeno un giocatore. `present`
   ora richiede almeno 11 titolari. **Resta aperto il secondo pezzo**: le altre sette avevano gli
   stessi identici undici della giornata 2, cioè il riporto automatico della piattaforma, non una
-  scelta. Per distinguerli lo snapshot conserva `lineup_saved_at` (da `dto.ldate`): serve una
-  cattura per vedere cosa contiene davvero prima di scrivere quella regola. Non indovinarla.
+  scelta. **Il payload non sa distinguerli**, verificato su una cattura vera del 21/09: su dieci
+  squadre `lucnt` è 0 per tutte, `capt` è null per tutte, `ldate` è l'istante della risposta
+  (tutti e dieci a 10:57:12 dello stesso giorno, non una data di salvataggio), e gli unici campi
+  che variano — `starts`, `bench`, `mdl`, `visb` — variano con "ha undici nomi oppure no".
+  Nemmeno la mappa degli endpoint dell'app Angular ha una lista di stato per giornata: i soli
+  servizi sono `teamLineup/{5 segmenti}`, `lineup/notcalculated/{n}`, `calculationday/{n}`,
+  `league/{status,timing,profile,competitions,custom-roles}`. Se la distinzione serve davvero,
+  l'unico segnale disponibile è il **confronto con la giornata precedente** — e va deciso
+  sapendo che accusa chi conferma lo stesso undici.
 - Il feed pubblica il **calendario di una giornata prima che la si giochi**: dieci partite con
   `sto = 0` e la lista giocatori **vuota**. Non è un errore, è il futuro — `roundHasStarted`
   chiude lì la passata. Prima della correzione la RPC rifiutava (`invalid_grades`, giustamente)

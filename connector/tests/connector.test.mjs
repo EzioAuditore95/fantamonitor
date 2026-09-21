@@ -59,8 +59,6 @@ test('a lineup payload belonging to another team or round is refused',()=>{
  assert.equal(toTeamStatus({team,dto:{tid:42,mday:5,ldate:'2026-09-01'}},5).present,false,'una data senza giocatori non è un inserimento');
  assert.equal(toTeamStatus({team,dto:{tid:42,mday:5,ldate:''}},5).present,false);
  assert.equal(toTeamStatus({team,dto:null},5).present,false);
- assert.equal(toTeamStatus({team,dto:lineup(11)},5).lineup_saved_at,'2026-09-01','la data resta, per poter distinguere il riporto automatico');
- assert.equal(toTeamStatus({team,dto:null},5).lineup_saved_at,undefined);
  assert.throws(()=>toTeamStatus({team,dto:{tid:43,mday:5}},5),/team_mismatch/);
  assert.throws(()=>toTeamStatus({team,dto:{tid:42,mday:6}},5),/round_mismatch/);
  assert.throws(()=>toTeamStatus({team,dto:'non-un-oggetto'},5),/invalid_payload/);

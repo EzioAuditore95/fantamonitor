@@ -83,15 +83,6 @@ export async function capture(league,round){
     let payload;try{payload=enrichLineup(await response.json());}catch{throw new Error('connector_lineup_invalid_json');}
     return {team,dto:payload?.teamLineupDto??null};
   }));
-  // Temporaneo, per capire quale campo distingue una formazione confermata da una riportata in
-  // automatico: solo i campi scalari del DTO, mai i giocatori. Da togliere appena la regola è
-  // scritta — vedi la voce "Una formazione sono undici nomi" in CLAUDE.md.
-  for(const {team,dto} of items){
-    if(!dto)continue;
-    const scalars=Object.fromEntries(Object.entries(dto).filter(([,v])=>v===null||['string','number','boolean'].includes(typeof v)));
-    const arrays=Object.fromEntries(Object.entries(dto).filter(([,v])=>Array.isArray(v)).map(([k,v])=>[k,v.length]));
-    console.info('lineup_dto_shape',{round,team:team.id,scalars,arrays});
-  }
   const teamsData=items.map(x=>toTeamStatus(x,round));
   if(teamsData.length!==league.teams.length)throw new Error('connector_incomplete_teams');
   const snapshot=snapshotFor(league,round,teamsData);
