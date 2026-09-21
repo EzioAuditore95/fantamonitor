@@ -139,6 +139,10 @@ test('TypeScript and SQL read the league contract from the same row',async()=>{
  const schemaAlpha=makeSnapshotSchema(cfgAlpha),schemaBeta=makeSnapshotSchema(cfgBeta);
  assert.equal(schemaAlpha.safeParse(observation.body).success,true);
  assert.equal(schemaBeta.safeParse(betaBody).success,true);
+ // Una lettura del 21/09 porta `lineup_saved_at` su ogni squadra: il campo non si scrive più,
+ // ma lo schema deve continuare a leggerlo. Toglierlo ha reso illeggibile l'intero archivio.
+ const archived={...observation.body,teams:observation.body.teams.map(t=>({...t,lineup_saved_at:'20260921105712665'}))};
+ assert.equal(schemaAlpha.safeParse(archived).success,true,'una lettura archiviata deve restare leggibile');
  // Round 31–35 are valid for alpha and out of range for beta.
  for(const [cfg,schema,body,admin_,league] of [[cfgAlpha,schemaAlpha,observation.body,alphaAdmin,ALPHA],[cfgBeta,schemaBeta,betaBody,betaAdmin,BETA]]){
   for(const round of [0,cfg.roundCount+1]){

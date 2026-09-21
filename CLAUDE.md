@@ -232,6 +232,11 @@ superato — la storia git li conserva, il repo no.
   l'errore di scrittura e lascia il refresh al proxy. Non "sistemare" quel `catch` vuoto.
 - Senza variabili Supabase l'app **non** va in errore: `supabaseConfigured()` mostra lo
   stato di attivazione incompleta. Cambiare le `NEXT_PUBLIC_*` richiede una nuova build.
+- **Togliere un campo da uno schema `.strict()` rompe i dati già salvati.** `lineup_saved_at` è
+  stato scritto in una sola cattura del 21/09 e poi rimosso: `listSnapshots` valida ogni lettura
+  archiviata, quindi `/api/archive` ha iniziato a rispondere 503 e la dashboard mostrava
+  «Archivio non disponibile». Il campo resta nello schema come **accettato ma non più prodotto**,
+  con un test che lo pretende. Prima di rimuoverne uno, controllare se è in `fm_observations`.
 - L'import delle osservazioni è **idempotente**: l'id è lo SHA-256 della forma canonica
   (`canonical()` in `lib/model.ts`). Stessa `(round, observed_at)` con body diverso →
   `observation_conflict` e rollback dell'intero batch. Non cambiare `canonical()` senza

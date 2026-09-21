@@ -23,6 +23,11 @@ const teamSchema=z.object({
   crest_url:z.string().optional(),
   kit_url:z.string().optional(),
   formation:formationSchema.optional(),
+  // Scritto per una sola cattura del 21/09 e poi abbandonato: `ldate` è l'istante della risposta,
+  // non la data di salvataggio che prometteva. Lo schema deve continuare ad accettarlo perché
+  // quella lettura è in archivio, e `.strict()` la renderebbe illeggibile — con lei l'intero
+  // archivio. **Togliere un campo da uno schema strict rompe i dati già salvati.**
+  lineup_saved_at:z.string().optional(),
 }).strict();
 
 const competitionMatchSchema=z.object({
