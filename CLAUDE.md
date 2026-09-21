@@ -88,6 +88,9 @@ Browser ──► Next.js App Router (app/)
   - `player-performance.ts` — fantavoto e totali per giocatore, puro e **parametrico sulla
     lega**: `scoringFor(cfg)` legge `cfg.rules.scoring` e ricade su Classic. Il test confronta
     media e fantamedia con quelle pubblicate da Fantacalcio su ~440 giocatori.
+  - `lineup-performance.ts` — incrocio fra le formazioni archiviate e i voti: punti degli
+    schierati, panchina, rimpianti, rendimento dei più schierati. Puro; la traduzione
+    giornata di lega → giornata di Serie A avviene **solo qui** (`serieAOffset`).
 - **`scripts/`** — utilità da riga di comando, fuori dalla build. `calibrate-live.mjs` scarica
   feed live, pagina voti e pagina statistiche, incrocia le tre fonti e stampa la tabella dei
   codici con i rispettivi pesi; con `--offline` la ricava dalle fixture in
@@ -317,6 +320,12 @@ superato — la storia git li conserva, il repo no.
 - Nel feed **non esiste un evento "porta inviolata"**: il clean sheet si deduce dai gol
   subiti a zero (`keptCleanSheet`: portiere, votato, nessun codice 4). Classic non lo paga —
   vale solo se la lega lo dichiara in `rules.scoring.cleanSheet`.
+- **Il punteggio ufficiale di una squadra non si ricalcola, si legge.** Riprodurlo richiede il
+  motore delle sostituzioni di Fantacalcio (cambi di modulo compresi): misurato contro dieci
+  risultati veri, il modello ovvio — stesso ruolo, ordine di panchina, più la porta inviolata —
+  ne azzecca quattro e sugli altri sbaglia da 1 a 3 punti. `lineup-performance.ts` prende il
+  totale dal payload di competizione già archiviato e chiama `substitutionGain` la differenza
+  dagli undici schierati. Non trasformarlo in un simulatore senza una prova migliore.
 - Le **presenze possono superare** quelle pubblicate da Fantacalcio: su ~440 giocatori cinque
   hanno un esordio che il feed vota e la pagina statistiche non conta, perché il giocatore è
   entrato nella lista ufficiale dopo. La nostra lettura è più completa, la loro è il registro:

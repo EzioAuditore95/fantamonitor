@@ -1,6 +1,7 @@
 import { createClient } from './supabase/server';
 import { liveRoundUrl } from './serie-a-events.ts';
 import { parseLiveRound,pendingRounds,type SerieARoundPayload } from './serie-a.ts';
+import type { PlayerRound } from './player-performance.ts';
 
 // Ingestion of the public live feed: the only I/O of this feature. No credentials, no connector,
 // no Playwright — the bucket is public, so a failure here can never cost anything but the data.
@@ -57,4 +58,30 @@ export async function syncSerieA(season:string,accessKey?:string):Promise<{round
     rounds.push(await importRound(parseLiveRound(raw,season,round),accessKey));
   }
   return {rounds,remaining:Math.max(0,pending.length-rounds.length)};
+}
+
+// Grades for the rounds a league actually needs, indexed by Serie A round and then by player.
+// Roles live on the player, not on the grade, and lineup scoring needs them for the clean sheet:
+// two queries and a join here beat an embedded select whose shape PostgREST decides.
+export async function gradesByRound(season:string,rounds:readonly number[]):Promise<Map<number,Map<number,PlayerRound>>>{
+  const out=new Map<number,Map<number,PlayerRound>>();
+  if(!rounds.length)return out;
+  const client=await createClient();
+  const {data:players,error:playersError}=await client.from('fm_serie_a_players').select('id,role');
+  if(playersError)throw new Error('Serie A players unavailable');
+  const roles=new Map((players??[]).map(p=>[p.id as number,(p.role??null) as string|null]));
+  for(let offset=0;;offset+=500){
+    const {data,error}=await client.from('fm_serie_a_grades').select('round,player_id,state,grade,events')
+      .eq('season',season).in('round',[...rounds]).order('round').order('player_id').range(offset,offset+499);
+    if(error)throw new Error('Serie A grades unavailable');
+    for(const row of data??[]){
+      const byPlayer=out.get(row.round as number)??new Map<number,PlayerRound>();
+      byPlayer.set(row.player_id as number,{player_id:row.player_id as number,round:row.round as number,
+        state:row.state as PlayerRound['state'],grade:row.grade==null?null:Number(row.grade),
+        events:(row.events??[]) as number[],role:roles.get(row.player_id as number)??null});
+      out.set(row.round as number,byPlayer);
+    }
+    if(!data||data.length<500)break;
+  }
+  return out;
 }
