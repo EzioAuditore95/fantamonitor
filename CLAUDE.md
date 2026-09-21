@@ -85,6 +85,9 @@ Browser ──► Next.js App Router (app/)
     conversione stagione `2026-2027` ⇄ `2026-27`, giornate ancora da chiedere.
   - `serie-a-store.ts` — l'unico I/O della feature: scarica il bucket pubblico e chiama
     `fm_import_serie_a_round`. Niente credenziali, niente connettore, niente Playwright.
+  - `player-performance.ts` — fantavoto e totali per giocatore, puro e **parametrico sulla
+    lega**: `scoringFor(cfg)` legge `cfg.rules.scoring` e ricade su Classic. Il test confronta
+    media e fantamedia con quelle pubblicate da Fantacalcio su ~440 giocatori.
 - **`scripts/`** — utilità da riga di comando, fuori dalla build. `calibrate-live.mjs` scarica
   feed live, pagina voti e pagina statistiche, incrocia le tre fonti e stampa la tabella dei
   codici con i rispettivi pesi; con `--offline` la ricava dalle fixture in
@@ -312,7 +315,12 @@ superato — la storia git li conserva, il repo no.
   poi tolto). L'ingestione deve reggere quello scarto, non negarlo — e una giornata si
   considera definitiva solo quando **tutte** le sue partite hanno `sto = 4`, non per orario.
 - Nel feed **non esiste un evento "porta inviolata"**: il clean sheet si deduce dai gol
-  subiti a zero. I codici 11, 12, 16 e 17 sono visti ma non identificati: valgono 0 e
+  subiti a zero (`keptCleanSheet`: portiere, votato, nessun codice 4). Classic non lo paga —
+  vale solo se la lega lo dichiara in `rules.scoring.cleanSheet`.
+- Le **presenze possono superare** quelle pubblicate da Fantacalcio: su ~440 giocatori cinque
+  hanno un esordio che il feed vota e la pagina statistiche non conta, perché il giocatore è
+  entrato nella lista ufficiale dopo. La nostra lettura è più completa, la loro è il registro:
+  il test lo tollera in un verso solo (mai meno delle loro) e non va "allineato" in silenzio. I codici 11, 12, 16 e 17 sono visti ma non identificati: valgono 0 e
   `tests/serie-a-events.test.mjs` fallisce se uno di loro inizia a muovere un fantavoto.
 - Dati reali (`lib/data/`, `prototype/data/`) sono fuori dal repo: non ricrearli né
   committare esempi con nomi o risultati veri.
