@@ -39,7 +39,6 @@
 .panel a,
 .timeline-row,
 .fixture,
-.number-card,
 .blank-panel,
 .drawer,
 [data-slot=dialog-content],
@@ -53,7 +52,6 @@
 .panel strong,
 .timeline-row strong,
 .fixture strong,
-.number-card strong,
 .blank-panel [data-slot=empty-title],
 .drawer h2,
 .drawer h3,
@@ -588,4 +586,65 @@
   color: var(--fm-muted-strong);
   font-size: .875rem;
   font-weight: 600;
+}
+
+/* Gettoni e penalità: this tab kept the light-theme colours the glass pass never reached. */
+.period-tabs {
+  padding: 3px !important;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 14px !important;
+  background: rgba(255,255,255,.055) !important;
+}
+
+.period-tabs [data-slot=tabs-trigger] {
+  color: var(--fm-muted) !important;
+  border-radius: 11px;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.period-tabs [data-state=active] {
+  color: #fff !important;
+  background: rgba(255,255,255,.11) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08) !important;
+}
+
+.penalty-strip strong {
+  color: var(--fm-text);
+}
+
+.penalty-strip span {
+  color: var(--fm-muted) !important;
+}
+
+.penalty-table th {
+  color: var(--fm-muted-strong) !important;
+  background: rgba(255,255,255,.04);
+}
+
+.penalty-table td,
+.penalty-table tbody tr,
+.penalty-table .penalty-team {
+  color: var(--fm-text-soft);
+  border-color: rgba(255,255,255,.075) !important;
+}
+
+.penalty-table td[data-label]:before {
+  color: var(--fm-muted);
+}
+
+.penalty-table tbody tr:last-child {
+  border-bottom: 0 !important;
+}
+
+.team-penalty-total strong {
+  color: var(--fm-text);
+}
+
+/* An amount owed has to read as owed. The contrast pass above paints every `.panel strong`
+   white with !important, so the due colour must outrank it rather than sit beside it. */
+.panel .amount-due,
+.drawer .amount-due,
+.strip-due strong {
+  color: var(--fm-red) !important;
 }
