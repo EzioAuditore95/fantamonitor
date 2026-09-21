@@ -40,6 +40,8 @@
 .sheetTable th{text-align:right;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:rgba(225,238,255,.55);padding:8px;font-weight:500}
 .sheetTable th:first-child,.sheetTable td:first-child{text-align:left}
 .sheetTable td{padding:8px;text-align:right;border-top:1px solid rgba(255,255,255,.06)}
+/* The history is a second block inside the same sheet: it needs its own heading. */
+.kicker{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:rgba(225,238,255,.55);margin-top:2px}
 .sheetNote{margin:0;color:rgba(225,238,255,.55);font-size:11px;line-height:1.5}
 @media(max-width:860px){.heroGrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:560px){.main{padding:18px 12px 44px}.heroGrid{gap:10px}.heroCard{padding:14px;min-height:132px}.heroCard strong{font-size:16px}.sheetStats{grid-template-columns:repeat(2,minmax(0,1fr))}}

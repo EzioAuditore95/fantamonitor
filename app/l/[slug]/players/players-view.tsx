@@ -10,7 +10,8 @@ import { SERIE_A_CHAMPIONSHIP } from '@/lib/serie-a-events';
 import styles from './page.module.css';
 
 type GradeRow={player_id:number;state:PlayerRound['state'];grade:number|null;events:number[]};
-type Payload={season:string;rounds:number[];players:{id:number;role:string|null}[];grades:Record<string,GradeRow[]>;error?:string};
+type SeasonRow={season:string;player_id:number;team:string|null;played:number|null;grade:number|null;fantasyGrade:number|null;goals:number|null;assists:number|null};
+type Payload={season:string;rounds:number[];players:{id:number;role:string|null}[];grades:Record<string,GradeRow[]>;history?:SeasonRow[];error?:string};
 type Identity={id:number;name:string;team:string;starts:number;benched:number};
 
 const num=(v:number|null,digits=2)=>v==null?'—':new Intl.NumberFormat('it-IT',{minimumFractionDigits:digits,maximumFractionDigits:digits}).format(v);
@@ -70,6 +71,7 @@ export default function PlayersView({config}:{config:LeagueConfig}){
   const mostUsed=[...totals].sort((a,b)=>(b.identity!.starts)-(a.identity!.starts))[0];
   const detail=open==null?null:totals.find(t=>t.player_id===open);
   const detailRounds=open==null?[]:rows.filter(r=>r.player_id===open).sort((a,b)=>a.round-b.round);
+  const detailHistory=open==null?[]:(payload?.history??[]).filter(h=>h.player_id===open).sort((a,b)=>b.season.localeCompare(a.season));
 
   return <div className="app-shell">
     <header className="topbar"><a href={base} className="brand"><span className="brand-mark">FM</span>FANTAMONITOR</a>
@@ -138,7 +140,16 @@ export default function PlayersView({config}:{config:LeagueConfig}){
                 <td>{bonus==null?'—':`${bonus>0?'+':''}${num(bonus,1)}`}</td>
                 <td><strong>{points==null?'—':num(points,1)}</strong></td></tr>})}</tbody>
           </table>
-          <p className={styles.sheetNote}>Le giornate sono quelle della lega; i voti sono della redazione Fantacalcio.</p>
+          {detailHistory.length>0&&<>
+            <div className={styles.kicker}>STAGIONI PRECEDENTI</div>
+            <table className={styles.sheetTable}>
+              <thead><tr><th>Stagione</th><th>Squadra</th><th>Pres.</th><th>MV</th><th>FM</th><th>Gol</th><th>Assist</th></tr></thead>
+              <tbody>{detailHistory.map(season=><tr key={season.season}><td>{season.season}</td><td>{season.team??'—'}</td>
+                <td>{season.played??'—'}</td><td>{num(season.grade)}</td><td>{num(season.fantasyGrade)}</td>
+                <td>{season.goals??'—'}</td><td>{season.assists??'—'}</td></tr>)}</tbody>
+            </table>
+          </>}
+          <p className={styles.sheetNote}>Le giornate sono quelle della lega; i voti sono della redazione Fantacalcio. Le stagioni precedenti sono i totali pubblicati da Fantacalcio, non ricalcolati.</p>
         </>}
       </SheetContent>
     </Sheet>

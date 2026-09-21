@@ -612,4 +612,31 @@ test('with its key the importer writes without a session, and without it nothing
  await assert.rejects(importRound(alphaViewer,serieARound(14)),/unauthorized/);
 });
 
+test('a finished season is stored as totals, and only by an admin',async()=>{
+ const season=(patch={})=>({season:'2022-23',players:[
+  {player_id:4661,name:'Osimhen',team:'NAP',role:'A',played:32,grade:6.73,fantasyGrade:9.14,goals:26,conceded:0,penaltiesSaved:0,assists:4,yellow:4,red:0,ownGoals:null},
+  {player_id:99999,name:'Ritirato',team:'XXX',role:'C',played:25,grade:6.64,fantasyGrade:8.24,goals:12,conceded:0,penaltiesSaved:0,assists:6,yellow:4,red:0,ownGoals:null}],...patch});
+ const call=(user,payload)=>asUser(user,'select fm_import_serie_a_season($1::jsonb) as r',[JSON.stringify(payload)]);
+ assert.deepEqual((await call(alphaAdmin,season())).rows[0].r,{season:'2022-23',players:2});
+ await assert.rejects(call(alphaViewer,season()),/unauthorized/);
+ // No foreign key to the player table on purpose: a past season is full of players who have
+ // left Serie A and will never appear in the live feed.
+ assert.equal((await asUser(alphaViewer,'select count(*)::int as n from fm_serie_a_players where id=99999')).rows[0].n,0,'he is in no live feed');
+ assert.equal((await asUser(alphaViewer,"select name from fm_serie_a_season_totals where player_id=99999")).rows[0].name,'Ritirato','and stored all the same');
+ assert.equal((await asUser(betaViewer,"select name from fm_serie_a_season_totals where player_id=4661")).rows[0].name,'Osimhen','championship history is not league scoped');
+ // Re-running replaces the season whole: that is what a corrected figure at the source needs.
+ const corrected=season();corrected.players=[{...corrected.players[0],goals:27}];
+ assert.deepEqual((await call(alphaAdmin,corrected)).rows[0].r,{season:'2022-23',players:1});
+ assert.equal((await asUser(alphaViewer,"select goals from fm_serie_a_season_totals where player_id=4661")).rows[0].goals,27);
+ await assert.rejects(call(alphaAdmin,season({season:'2022-2023'})),/invalid_season/);
+ await assert.rejects(call(alphaAdmin,season({players:[]})),/invalid_players/);
+});
+test('a season the feed is still filling is never overwritten by an aggregate',async()=>{
+ // Round 20 of 2026-27 was imported earlier from a real feed: the two describe the same months
+ // and only one of them can be taken apart into rounds again.
+ await assert.rejects(asUser(alphaAdmin,'select fm_import_serie_a_season($1::jsonb) as r',
+  [JSON.stringify({season:'2026-27',players:[{player_id:133,name:'Skorupski',team:'BOL',role:'P',played:5,grade:6,fantasyGrade:5.4,goals:0,conceded:6,penaltiesSaved:0,assists:0,yellow:0,red:0,ownGoals:0}]})]),
+  /season_is_live/);
+});
+
 after(async()=>{await db.close();});

@@ -1,6 +1,6 @@
 import { requireLeagueMember } from '@/app/auth';
 import { listSnapshots } from '@/lib/archive';
-import { gradesByRound } from '@/lib/serie-a-store';
+import { gradesByRound,historyFor } from '@/lib/serie-a-store';
 import { sourceSeason } from '@/lib/serie-a';
 const headers={'Cache-Control':'private, no-store'};
 
@@ -22,7 +22,7 @@ export async function GET(request:Request){
         const id=Number(player.id);if(Number.isInteger(id)&&id>0)ours.add(id);
       }
     }
-    if(!leagueRounds.size)return Response.json({season:sourceSeason(cfg.season),rounds:[],players:[],grades:{}},{headers});
+    if(!leagueRounds.size)return Response.json({season:sourceSeason(cfg.season),rounds:[],players:[],grades:{},history:[]},{headers});
     const rounds=[...leagueRounds].sort((a,b)=>a-b);
     const byRound=await gradesByRound(sourceSeason(cfg.season),rounds.map(r=>r+cfg.serieAOffset));
     const grades:Record<string,{player_id:number;state:string;grade:number|null;events:number[]}[]>={};
@@ -32,7 +32,9 @@ export async function GET(request:Request){
         .map(row=>{players.set(row.player_id,{id:row.player_id,role:row.role??null});
           return {player_id:row.player_id,state:row.state,grade:row.grade,events:[...row.events]};});
     }
-    return Response.json({season:sourceSeason(cfg.season),rounds,players:[...players.values()],grades},{headers});
+    // Past seasons are optional furniture: a missing history must not cost the page its grades.
+    const history=await historyFor([...ours]).catch(e=>{console.error('players_history_failed',e instanceof Error?e.message:'unknown');return [];});
+    return Response.json({season:sourceSeason(cfg.season),rounds,players:[...players.values()],grades,history},{headers});
   }catch(e){
     console.error('players_read_failed',e instanceof Error?e.message:'unknown');
     return Response.json({error:'Voti dei calciatori non disponibili.'},{status:503,headers});

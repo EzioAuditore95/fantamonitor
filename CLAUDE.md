@@ -40,7 +40,7 @@ Browser ──► Next.js App Router (app/)
              ├─ app/auth.ts         getAppUser() · requireLeagueMember(slug)
              ├─ app/l/[slug]/*      dashboard, stats, lineup-analytics della lega
              ├─ app/api/*/route.ts  archive · reviews · sync · schedule · performance ·
-             │                     players · serie-a/sync · auth/logout
+             │                     players · serie-a/sync · serie-a/history · auth/logout
              └─ lib/*               modello Zod, regole penalità, calcoli, client Supabase
                         │
                         ▼
@@ -83,6 +83,8 @@ Browser ──► Next.js App Router (app/)
     la produce `scripts/calibrate-live.mjs` e la riverifica `tests/serie-a-events.test.mjs`.
   - `serie-a.ts` — lettura pura del feed: Zod (**non** `.strict()`, è un documento altrui),
     conversione stagione `2026-2027` ⇄ `2026-27`, giornate ancora da chiedere.
+  - `serie-a-history.ts` — parser puro delle stagioni passate dalla pagina statistiche. Sono
+    **totali**, non giornate: per questo non finiscono in `fm_serie_a_grades`.
   - `serie-a-store.ts` — l'unico I/O della feature: scarica il bucket pubblico e chiama
     `fm_import_serie_a_round`. Niente credenziali, niente connettore, niente Playwright.
   - `player-performance.ts` — fantavoto e totali per giocatore, puro e **parametrico sulla
@@ -91,7 +93,8 @@ Browser ──► Next.js App Router (app/)
   - `lineup-performance.ts` — incrocio fra le formazioni archiviate e i voti: punti degli
     schierati, panchina, rimpianti, rendimento dei più schierati. Puro; la traduzione
     giornata di lega → giornata di Serie A avviene **solo qui** (`serieAOffset`).
-- **`scripts/`** — utilità da riga di comando, fuori dalla build. `calibrate-live.mjs` scarica
+- **`scripts/`** — utilità da riga di comando, fuori dalla build. Si eseguono con
+  `node --experimental-strip-types`, perché importano moduli `lib/*.ts`. `calibrate-live.mjs` scarica
   feed live, pagina voti e pagina statistiche, incrocia le tre fonti e stampa la tabella dei
   codici con i rispettivi pesi; con `--offline` la ricava dalle fixture in
   `tests/fixtures/serie-a/` (campione di 5 giornate, non un archivio).
@@ -250,6 +253,14 @@ superato — la storia git li conserva, il repo no.
 - `tests/postgres.test.mjs` esegue le migrazioni in PGlite con ruoli e `auth.uid()`
   simulati: **ogni nuova migrazione deve poter girare lì**, quindi niente costrutti
   esclusivi di Supabase non emulabili. Usa `prototype/tests/fixture.json` come snapshot valido.
+- Nelle pagine di Fantacalcio l'URL di un calciatore **cambia forma fra stagione corrente e
+  passata**: `.../osimhen/4661` contro `.../osimhen/4661/2022-23`. Ancorare l'id alla fine
+  dell'href faceva parsare zero righe **in silenzio**, che è il modo peggiore di rompersi.
+- Lo storico è l'**unico HTML che l'app legge a runtime**; tutto il resto passa dal bucket JSON.
+  Se la pagina statistiche cambia, `importSeason` fallisce con `serie_a_history_empty` invece di
+  svuotare una stagione già archiviata, e una stagione ancora in corso è rifiutata
+  (`season_is_live`): totali e giornate descrivono gli stessi mesi e solo le seconde si possono
+  ricomporre dai pezzi.
 - La scheda calciatori disegna l'andamento con **barre CSS**, non con recharts: `components/ui/chart.tsx`
   è vendorizzato ma non lo usa nessuna pagina, e `stats-view` fa già le sue sparkline così. Una
   giornata senza voto è una **barra vuota**, non una barra corta: 3px di gradiente direbbero zero.

@@ -13,12 +13,16 @@
 //     HOW MUCH each code is worth. The weights are the official Classic formula, i.e. the
 //     preset a league starts from.
 //
-// `node scripts/calibrate-live.mjs` refreshes the fixtures from the network and prints the
-// report. `tests/serie-a-events.test.mjs` re-runs the same derivation offline on the committed
+// `node --experimental-strip-types scripts/calibrate-live.mjs` refreshes the fixtures from the
+// network and prints the report; the flag is needed because the statistics parser is shared with
+// the app. `tests/serie-a-events.test.mjs` re-runs the same derivation offline on the committed
 // fixtures, so a wrong table fails CI instead of silently producing wrong fantasy points.
 
 import { mkdir,readFile,readdir,writeFile } from 'node:fs/promises';
 import { dirname,join } from 'node:path';
+// One parser for the statistics page, shared with the app: run this script with
+// `node --experimental-strip-types`, which is what npm test uses for the same reason.
+import { parseSeasonStats } from '../lib/serie-a-history.ts';
 import { fileURLToPath } from 'node:url';
 
 export const SERIE_A=21; // championship id, the same 21 as in /api/v1/Excel/votes/21/{round}
@@ -68,23 +72,6 @@ export function parseVotesPage(html){
       r:row.match(/class="role"\s*data-value="([^"]*)"/)?.[1]??null,
       g:grades.length?number(grades[0]):null,f:number(fanta[0]),
       b:bonus.map(([,value])=>Number(value)||0)};
-  }
-  return out;
-}
-
-// Season totals. Yellow and red cards are absent from the votes page, so this is the only
-// public check on the two codes that matter most to a fantasy score after goals.
-export function parseSeasonStats(html){
-  const out={};
-  for(const row of rows(html)){
-    const id=row.match(/\/serie-a\/squadre\/[^/"]+\/[^/"]+\/(\d+)"/)?.[1];
-    if(!id)continue;
-    const cells=Object.fromEntries([...row.matchAll(/data-col-key="([^"]+)"[^>]*>([\s\S]*?)<\/t[dh]>/g)].map(([,key,body])=>[key,text(body)]));
-    if(!('pg' in cells))continue;
-    const num=key=>{const n=Number(String(cells[key]??'').replace(',','.'));return Number.isFinite(n)?n:null;};
-    out[id]={team:cells.sq??null,played:num('pg'),grade:num('mv'),fantaGrade:num('mfv'),
-      goals:num('gol'),conceded:num('gs'),saved:num('rp'),assists:num('ass'),
-      yellow:num('amm'),red:num('esp'),own:num('au')};
   }
   return out;
 }
@@ -233,7 +220,11 @@ async function refresh(season){
     rounds.push({round,live:live.body,votes:parsed});
   }
   const stats=await get(statsUrl(season),'html');
-  const parsedStats=stats.status===200?parseSeasonStats(stats.body):{};
+  // Keyed by player id: the calibration looks players up, it does not iterate them.
+  const parsedStats=stats.status===200?Object.fromEntries(parseSeasonStats(stats.body)
+    .map(row=>[String(row.player_id),{team:row.team,played:row.played,grade:row.grade,fantaGrade:row.fantasyGrade,
+      goals:row.goals,conceded:row.conceded,saved:row.penaltiesSaved,assists:row.assists,
+      yellow:row.yellow,red:row.red,own:row.ownGoals}])):{};
   await writeFile(join(FIXTURES,'season-stats.json'),JSON.stringify(parsedStats));
   console.log(`season stats: ${Object.keys(parsedStats).length} players`);
   return {rounds,season:parsedStats};
