@@ -40,7 +40,7 @@ Browser ──► Next.js App Router (app/)
              ├─ app/auth.ts         getAppUser() · requireLeagueMember(slug)
              ├─ app/l/[slug]/*      dashboard, stats, lineup-analytics della lega
              ├─ app/api/*/route.ts  archive · reviews · sync · schedule · performance ·
-             │                     serie-a/sync · auth/logout
+             │                     players · serie-a/sync · auth/logout
              └─ lib/*               modello Zod, regole penalità, calcoli, client Supabase
                         │
                         ▼
@@ -59,7 +59,7 @@ Browser ──► Next.js App Router (app/)
 ### Livelli
 
 - **`app/`** — pagine RSC + componenti client densi. `app/l/[slug]/` contiene dashboard,
-  `stats/` e `lineup-analytics/` della lega; `app/page.tsx` reindirizza alla lega dell'utente
+  `stats/`, `lineup-analytics/` e `players/` della lega; `app/page.tsx` reindirizza alla lega dell'utente
   (o mostra il selettore). La `LeagueConfig` arriva ai componenti client **come prop da RSC**,
   non da un context né da un endpoint. La UI è a tab (`Dashboard`) più due route secondarie
   con `global-bottom-nav` e `tab-query-bridge` per il ritorno alla tab richiesta.
@@ -250,6 +250,13 @@ superato — la storia git li conserva, il repo no.
 - `tests/postgres.test.mjs` esegue le migrazioni in PGlite con ruoli e `auth.uid()`
   simulati: **ogni nuova migrazione deve poter girare lì**, quindi niente costrutti
   esclusivi di Supabase non emulabili. Usa `prototype/tests/fixture.json` come snapshot valido.
+- La scheda calciatori disegna l'andamento con **barre CSS**, non con recharts: `components/ui/chart.tsx`
+  è vendorizzato ma non lo usa nessuna pagina, e `stats-view` fa già le sue sparkline così. Una
+  giornata senza voto è una **barra vuota**, non una barra corta: 3px di gradiente direbbero zero.
+- La copia in `/private/tmp` per aggirare il blocco TCC **non basta più da sola**: il pannello
+  browser rifiuta una `cwd` fuori dalla radice di progetto (`cwd must be a relative path within
+  the project root`), e la radice è proprio la cartella bloccata. Per vedere le pagine a schermo
+  serve `npm run dev` da un terminale dell'utente, che TCC non blocca.
 - I dialog e i drawer stanno a `z-index` 90/91 e le tendine portate a 100, sopra tutta la
   cromatura del tema (topbar 50, barra tab 60, FAB 70, bottom nav 80). Serviva: prima erano
   tutti sotto la barra delle tab. **Attenzione però**: il guasto non si riproduce in

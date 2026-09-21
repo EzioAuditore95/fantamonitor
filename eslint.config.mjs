@@ -40,11 +40,11 @@ const eslintConfig = defineConfig([
     },
   },
   {
-    // Crests and kits are ~26px avatars served from Fantacalcio's own CDN, on a private
+    // Crests, kits and player faces are small avatars served from Fantacalcio's own CDN, on a private
     // dashboard with a handful of users. `next/image` would need `remotePatterns` for a
     // host we do not control and would route every thumbnail through the paid optimizer,
     // which the rule's own message warns about. The trade does not pay here.
-    files: ["app/dashboard.tsx", "app/team-detail.tsx", "app/fantasy-pitch.tsx"],
+    files: ["app/dashboard.tsx", "app/team-detail.tsx", "app/fantasy-pitch.tsx", "app/l/**/players/players-view.tsx"],
     rules: {
       "@next/next/no-img-element": "off",
     },
