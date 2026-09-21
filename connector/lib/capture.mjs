@@ -45,7 +45,18 @@ async function gather(league,round){
   return withLeagueContext(league.id,creds.sessionState,async context=>{
     const page=await context.newPage();
     let teamsPayload=null;
-    const listener=async response=>{if(/\/onboarding\/v1\/league\/competition\/teams/.test(response.url())&&response.status()===200){try{teamsPayload=await response.json();}catch{}}};
+    // Temporaneo: la pagina mostra "Non inserita" per squadre che l'API dà con undici nomi,
+    // quindi quello stato lo prende da una chiamata che non conosciamo. Qui si annota che cosa
+    // chiede davvero la pagina — solo URL, nessun corpo. Da togliere appena trovata la fonte.
+    const seenUrls=new Set();
+    const listener=async response=>{
+      const url=response.url();
+      if(/apileague[.]fantacalcio[.]it|leghe[.]fantacalcio[.]it\/servizi/.test(url)&&!/\.(js|css|png|jpg|webp|svg|woff2?)(\?|$)/.test(url)){
+        const key=url.replace(/\d{5,}/g,'{id}');
+        if(!seenUrls.has(key)){seenUrls.add(key);console.info('page_xhr',{round,status:response.status(),url:key});}
+      }
+      if(/\/onboarding\/v1\/league\/competition\/teams/.test(url)&&response.status()===200){try{teamsPayload=await response.json();}catch{}}
+    };
     page.on('response',listener);
     try{
       const cdp=await page.context().newCDPSession(page);
