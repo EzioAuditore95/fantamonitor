@@ -250,6 +250,18 @@ textarea {
   height: 20px;
 }
 
+/* Two labels per tab, one shown at a time. At 375px the bar is 341px wide and a tab gets
+   about 54px: "Competizione" does not fit there, and neither does "Gettoni e penalità".
+   The ellipsis is the parachute for whatever label comes next. */
+.main-tabs .tab-long { display: none; }
+
+.main-tabs .tab-short {
+  display: inline;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .main-tabs [data-slot=tabs-trigger][data-state=active] {
   color: #fff !important;
   background: linear-gradient(145deg, rgba(110,168,255,.25), rgba(255,255,255,.08));
@@ -753,6 +765,9 @@ h2,
 }
 
 @media (min-width: 1000px) {
+  .main-tabs .tab-long { display: inline; }
+  .main-tabs .tab-short { display: none; }
+
   .app-shell {
     padding: 0 40px 44px;
   }
