@@ -294,6 +294,15 @@ superato — la storia git li conserva, il repo no.
   solo via `fm_import_serie_a_round`, che chiede di essere **admin di una lega qualsiasi** —
   non c'è una lega di cui essere admin. La stagione è nel formato della fonte (`2026-27`), non
   in quello di `fm_leagues` (`2026-2027`): si traduce al confine, non si mescolano.
+- L'import dei voti ha **due porte**, e non è ridondanza: l'admin con sessione (il pulsante in
+  Gestione) e la chiave del cron (`CRON_SECRET` su Vercel, digest in migrazione, diversa da
+  `AUTO_SYNC_DB_SECRET`). La route non confronta niente, passa il bearer alla RPC: l'autorità è
+  il database. Il cron non ha lega da cui leggere la stagione e la ricava dal calendario
+  (`currentSourceSeason`, luglio è il confine), e legge lo stato delle giornate da
+  `fm_serie_a_rounds_for_import` invece di aprire la policy di lettura ad `anon`.
+- Nei cancelli in PL/pgSQL **coalescere sempre l'autorizzatore**: `if not (null or false)` non
+  solleva niente e lascia passare. È successo davvero, con uno stub di test che restituiva NULL
+  al posto di false; ora c'è un test che installa un autorizzatore NULL e pretende il rifiuto.
 - **Una giornata definitiva non si reimporta**: `round_already_final`. Il feed continua a
   servire una giornata finita, e reimportarla potrebbe solo sostituire una correzione della
   redazione con la lettura live che l'aveva preceduta. Finché è in corso, invece, ogni import

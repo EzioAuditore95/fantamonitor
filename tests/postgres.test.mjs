@@ -505,8 +505,8 @@ test('importing a round stores grades, matches, players and teams together',asyn
  assert.equal((await asUser(alphaViewer,'select final from fm_serie_a_rounds where round=5')).rows[0].final,true);
 });
 test('only an admin of some league may import, whichever league it is',async()=>{
- await assert.rejects(importRound(alphaViewer,serieARound(6)),/admin_required/);
- await assert.rejects(importRound(stranger,serieARound(6)),/admin_required/);
+ await assert.rejects(importRound(alphaViewer,serieARound(6)),/unauthorized/);
+ await assert.rejects(importRound(stranger,serieARound(6)),/unauthorized/);
  // Beta's admin is admin of nothing in Serie A, and that is precisely the point: the table
  // has no owner, so the gate only separates who may write from who may read.
  assert.equal((await importRound(betaAdmin,serieARound(6))).rows[0].r.round,6);
@@ -567,6 +567,49 @@ test('a real round from the feed is accepted exactly as the parser hands it over
  assert.deepEqual(keeper.events,[4]);
  const unrated=(await asUser(alphaViewer,"select count(*)::int as n from fm_serie_a_grades where round=20 and state='no_vote' and grade is null")).rows[0].n;
  assert.equal(unrated,26,'players who came on too late are stored as a state, and the check constraint accepts them');
+});
+
+test('the scheduled importer has a key of its own, and it is not the connector\'s',async()=>{
+ assert.equal((await db.query("select public.fm_serie_a_import_authorized('chiave-sbagliata') as ok")).rows[0].ok,false);
+ assert.equal((await db.query("select public.fm_serie_a_import_authorized('') as ok")).rows[0].ok,false);
+ assert.equal((await db.query("select public.fm_serie_a_import_authorized(null) as ok")).rows[0].ok,false);
+ // Two doors, two secrets: one opens the league's own data through the connector, the other a
+ // public championship table. Sharing a digest would let either stand in for the other. Read from
+ // the migrations, not from pg_proc: the auto-sync gate is stubbed above to be testable at all.
+ const digestOf=async suffix=>(await sqlOf(migrations.find(name=>name.endsWith(suffix)))).match(/[0-9a-f]{64}/)?.[0];
+ const autoSync=await digestOf('_round_schedule_auto_sync.sql'),serieA=await digestOf('_serie_a_import_key.sql');
+ assert.equal(autoSync?.length,64);assert.equal(serieA?.length,64);
+ assert.notEqual(autoSync,serieA);
+});
+test('with its key the importer writes without a session, and without it nothing does',async()=>{
+ const KEY='chiave-serie-a-di-test';
+ await db.exec(`create or replace function public.fm_serie_a_import_authorized(access_key text) returns boolean
+  language sql immutable security definer set search_path='' as $$ select coalesce(access_key,'')='${KEY}' $$;`);
+ // The claim, not the role, is what says who is asking: a security definer function reads
+ // auth.uid(), so leaving the previous test's subject set would let anon inherit his leagues.
+ const asAnon=async(sql,args=[])=>{await db.exec('set role anon');await db.query("select set_config('request.jwt.claim.sub','',false)");
+  try{return await db.query(sql,args);}finally{await db.exec('reset role');}};
+ const payload=JSON.stringify(serieARound(12));
+ await assert.rejects(asAnon('select fm_import_serie_a_round($1::jsonb) as r',[payload]),/unauthorized/,'no session and no key opens nothing');
+ await assert.rejects(asAnon('select fm_import_serie_a_round($1::jsonb,$2) as r',[payload,'chiave-sbagliata']),/unauthorized/);
+ assert.equal((await asAnon('select fm_import_serie_a_round($1::jsonb,$2) as r',[payload,KEY])).rows[0].r.round,12);
+ // An authorizer that answers NULL must not open anything either: this is the shape the gate
+ // had until a stub returning NULL walked straight through it.
+ await db.exec(`create or replace function public.fm_serie_a_import_authorized(access_key text) returns boolean
+  language sql immutable security definer set search_path='' as $$ select null::boolean $$;`);
+ await assert.rejects(asAnon('select fm_import_serie_a_round($1::jsonb,$2) as r',[JSON.stringify(serieARound(15)),KEY]),/unauthorized/);
+ await assert.rejects(asAnon('select fm_serie_a_rounds_for_import($1,$2) as r',[KEY,'2026-27']),/unauthorized/);
+ await db.exec(`create or replace function public.fm_serie_a_import_authorized(access_key text) returns boolean
+  language sql immutable security definer set search_path='' as $$ select coalesce(access_key,'')='${KEY}' $$;`);
+ // The state it needs to know where to resume is behind the same key, so the read policy for
+ // members never has to be opened to anon.
+ await assert.rejects(asAnon('select fm_serie_a_rounds_for_import($1,$2) as r',['chiave-sbagliata','2026-27']),/unauthorized/);
+ const state=(await asAnon('select fm_serie_a_rounds_for_import($1,$2) as r',[KEY,'2026-27'])).rows[0].r;
+ assert.ok(state.some(r=>r.round===12&&r.final===true));
+ assert.equal((await asAnon('select fm_serie_a_rounds_for_import($1,$2) as r',[KEY,'2099-00'])).rows[0].r.length,0);
+ // The first door is untouched: an admin still writes with no key, a viewer still cannot.
+ assert.equal((await importRound(alphaAdmin,serieARound(13))).rows[0].r.round,13);
+ await assert.rejects(importRound(alphaViewer,serieARound(14)),/unauthorized/);
 });
 
 after(async()=>{await db.close();});

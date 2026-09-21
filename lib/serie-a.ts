@@ -73,6 +73,14 @@ export function sourceSeason(season:string):string{
   return `${match[1]}-${match[2].slice(2)}`;
 }
 
+// The unattended run has no league to read the season from: it has no session, so fm_leagues is
+// behind RLS. The championship calendar settles it instead — a Serie A season opens in August and
+// closes in May, so July is the border and no configuration is needed to know which one we are in.
+export function currentSourceSeason(now=new Date()):string{
+  const year=now.getUTCFullYear(),start=now.getUTCMonth()>=6?year:year-1;
+  return `${start}-${String((start+1)%100).padStart(2,'0')}`;
+}
+
 // What is still worth asking the source for: everything not already settled. A round stays in
 // the list while it is being played, and leaves it for good the moment it is final.
 export function pendingRounds(stored:readonly {round:number;final:boolean}[],lastRound=38):number[] {

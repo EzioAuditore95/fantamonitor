@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {parseLiveRound,pendingRounds,sourceSeason} from '../lib/serie-a.ts';
+import {currentSourceSeason,parseLiveRound,pendingRounds,sourceSeason} from '../lib/serie-a.ts';
 
 const fixture=async round=>JSON.parse(await readFile(new URL(`./fixtures/serie-a/live-${round}.json`,import.meta.url),'utf8'));
 const first=await fixture(1),fifth=await fixture(5);
@@ -60,6 +60,16 @@ test('the two season vocabularies are translated, never mixed',()=>{
  assert.throws(()=>sourceSeason('2026'));
 });
 
+test('the scheduled run reads the season off the calendar, having no league to ask',()=>{
+ // July is the border: a Serie A season opens in August and closes in May.
+ assert.equal(currentSourceSeason(new Date('2026-09-21T06:00:00Z')),'2026-27');
+ assert.equal(currentSourceSeason(new Date('2027-05-30T06:00:00Z')),'2026-27');
+ assert.equal(currentSourceSeason(new Date('2027-07-01T06:00:00Z')),'2027-28');
+ assert.equal(currentSourceSeason(new Date('2029-08-10T06:00:00Z')),'2029-30');
+ // The turn of the century keeps two digits rather than becoming '2099-100'.
+ assert.equal(currentSourceSeason(new Date('2099-08-10T06:00:00Z')),'2099-00');
+ assert.equal(sourceSeason(currentSourceSeason(new Date('2026-09-21T06:00:00Z'))),'2026-27');
+});
 test('a settled round is never asked for again, a live one is',()=>{
  assert.deepEqual(pendingRounds([{round:1,final:true},{round:2,final:false}],5),[2,3,4,5]);
  assert.deepEqual(pendingRounds([],3),[1,2,3]);

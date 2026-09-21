@@ -11,8 +11,15 @@ const MAX_ROUNDS_PER_RUN=8;
 
 export type RoundOutcome={round:number;status:'imported'|'already_final'|'not_published';final?:boolean;grades?:number};
 
-export async function storedRounds(season:string):Promise<{round:number;final:boolean}[]>{
+// Without a session the table is unreadable — the read policy is for `authenticated` — so the
+// unattended run asks the same key for the same answer instead of the read policy opening to anon.
+export async function storedRounds(season:string,accessKey?:string):Promise<{round:number;final:boolean}[]>{
   const client=await createClient();
+  if(accessKey){
+    const {data,error}=await client.rpc('fm_serie_a_rounds_for_import',{access_key:accessKey,season});
+    if(error)throw new Error(/unauthorized/.test(error.message)?'serie_a_unauthorized':'Serie A rounds unavailable');
+    return (data??[]) as {round:number;final:boolean}[];
+  }
   const {data,error}=await client.from('fm_serie_a_rounds').select('round,final').eq('season',season).order('round');
   if(error)throw new Error('Serie A rounds unavailable');
   return data??[];
@@ -26,25 +33,28 @@ export async function fetchLiveRound(round:number):Promise<unknown|null>{
   return await response.json();
 }
 
-export async function importRound(payload:SerieARoundPayload):Promise<RoundOutcome>{
+// The key is the door for the caller that has no session; a logged-in admin passes none and is
+// recognised by the RPC itself. Neither branch is decided here: the database is the authority.
+export async function importRound(payload:SerieARoundPayload,accessKey?:string):Promise<RoundOutcome>{
   const client=await createClient();
-  const {data,error}=await client.rpc('fm_import_serie_a_round',{payload});
+  const {data,error}=await client.rpc('fm_import_serie_a_round',accessKey?{payload,access_key:accessKey}:{payload});
   // Settled rounds are refused by design, and racing two syncs is the ordinary way to meet that
   // refusal: it is an outcome to report, not a failure to raise.
   if(error?.message.includes('round_already_final'))return {round:payload.round,status:'already_final'};
-  if(error){console.error('serie_a_import_failed',{round:payload.round,message:error.message});throw new Error('serie_a_import_failed');}
+  if(error){console.error('serie_a_import_failed',{round:payload.round,message:error.message});
+    throw new Error(/unauthorized|admin_required/.test(error.message)?'serie_a_unauthorized':'serie_a_import_failed');}
   const result=data as {grades:number;final:boolean};
   return {round:payload.round,status:'imported',final:result.final,grades:result.grades};
 }
 
 // Rounds are published in order, so the first one the source has not published ends the run.
-export async function syncSerieA(season:string):Promise<{rounds:RoundOutcome[];remaining:number}>{
-  const pending=pendingRounds(await storedRounds(season));
+export async function syncSerieA(season:string,accessKey?:string):Promise<{rounds:RoundOutcome[];remaining:number}>{
+  const pending=pendingRounds(await storedRounds(season,accessKey));
   const rounds:RoundOutcome[]=[];
   for(const round of pending.slice(0,MAX_ROUNDS_PER_RUN)){
     const raw=await fetchLiveRound(round);
     if(!raw){rounds.push({round,status:'not_published'});return {rounds,remaining:0};}
-    rounds.push(await importRound(parseLiveRound(raw,season,round)));
+    rounds.push(await importRound(parseLiveRound(raw,season,round),accessKey));
   }
   return {rounds,remaining:Math.max(0,pending.length-rounds.length)};
 }

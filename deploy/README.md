@@ -39,6 +39,36 @@ Non usare chiavi service-role o secret al loro posto. Allineare i valori in tutt
 gli ambienti che devono leggere lo stesso progetto; anteprime con dati di test
 possono invece usare un progetto Supabase separato.
 
+### Voti Serie A: il cron e la sua chiave
+
+`vercel.json` pianifica `GET /api/serie-a/cron` ogni giorno alle 06:00 UTC. Vercel accompagna
+ogni invocazione pianificata con `Authorization: Bearer ${CRON_SECRET}`, e quel bearer **è** la
+chiave che il database controlla: la route non confronta niente: passa il valore a
+`fm_import_serie_a_round`, e decide `fm_serie_a_import_authorized`, di cui la migrazione
+`20260921000001_serie_a_import_key.sql` conserva **solo il digest**.
+
+Quindi su Vercel va impostata una sola variabile, `CRON_SECRET`, con la chiave in chiaro il cui
+SHA-256 è già nella migrazione. Per generarne una nuova (e ruotarla):
+
+```sh
+KEY=$(openssl rand -base64 36 | tr -d '\n' | tr '+/' '-_')
+echo "$KEY"                                             # → CRON_SECRET su Vercel
+printf '%s' "$KEY" | openssl dgst -sha256 -hex          # → digest da mettere in migrazione
+```
+
+Il digest nella migrazione e il valore su Vercel vanno cambiati **insieme**: finché non
+coincidono il cron riceve 403 e il pulsante «Aggiorna voti Serie A» in Gestione continua a
+funzionare, perché passa dall'altra porta (admin con sessione). È la ragione per cui le porte
+sono due: una rotazione sbagliata non lascia i voti senza nessun modo di entrare.
+
+La chiave è **diversa** da `AUTO_SYNC_DB_SECRET`: quella apre i dati della lega attraverso il
+connettore, questa una tabella di campionato pubblica, e un test verifica che i due digest non
+coincidano.
+
+Con il piano Hobby Vercel esegue un cron al giorno: basta, perché servono le giornate
+**chiuse**, non i voti in diretta. Una giornata che finisce lunedì alle 22:45 entra martedì
+mattina; chi ha fretta usa il pulsante.
+
 Impostare in Supabase Auth l'URL del sito Vercel finale. L'accesso attuale usa
 email/password e non richiede un callback OAuth. Cambiare le variabili NEXT_PUBLIC
 richiede una nuova build. Una build senza variabili mostra lo stato di configurazione
