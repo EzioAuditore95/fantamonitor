@@ -15,6 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Empty,EmptyHeader,EmptyTitle,EmptyDescription } from '@/components/ui/empty';
 import { initials,displayDate,latestByRound,type Archive } from '@/lib/model';
 import { teamColor,teamNames,type LeagueConfig } from '@/lib/league';
+import { monitoredRound } from '@/lib/serie-a';
 
 function Crest({cfg,name,url}:{cfg:LeagueConfig;name:string;url?:string}){return <span className="crest" style={{backgroundColor:teamColor(cfg,name),overflow:'hidden'}} aria-hidden="true">{url?<img src={url} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/>:initials(name)}</span>}
 function Status({present}:{present:boolean|undefined}){return <span className={'badge '+(present===undefined?'unknown':present?'present':'absent')}>{present===undefined?<Info/>:present?<CheckCircle2/>:<Clock3/>}{present===undefined?'Nessuna lettura':present?'Inserita':'Non inserita'}</span>}
@@ -27,12 +28,30 @@ export default function Dashboard({config,leagues}:{config:LeagueConfig;leagues:
   const [loading,setLoading]=useState(true),[error,setError]=useState(''),[detail,setDetail]=useState<string|null>(null);
   const [importOpen,setImportOpen]=useState(false),[file,setFile]=useState<File|null>(null),[importing,setImporting]=useState(false),[syncing,setSyncing]=useState(false),[importError,setImportError]=useState(''),[message,setMessage]=useState('');
   const [credOpen,setCredOpen]=useState(false),[gradesSyncing,setGradesSyncing]=useState(false),[historyImporting,setHistoryImporting]=useState(false);
+  // Le giornate di Serie A già definitive, per sapere su quale giornata aprire il monitor.
+  // `null` finché non si sa; `[]` se la richiesta fallisce, così il ripiego parte lo stesso.
+  const [serieA,setSerieA]=useState<{round:number;final:boolean}[]|null>(null);
+  const defaulted=useRef(false);
   const [now,setNow]=useState(0);const mounted=useRef(true);const requestId=useRef(0);
   const refresh=useCallback(async()=>{const request=++requestId.current;setLoading(true);setError('');try{const res=await fetch(`/api/archive?league=${encodeURIComponent(cfg.slug)}`,{cache:'no-store'});const result=await res.json() as Archive & {error?:string};if(!res.ok)throw new Error(result.error);if(mounted.current&&request===requestId.current)setData(result);}catch(e){if(mounted.current&&request===requestId.current)setError(e instanceof Error?e.message:'Lettura non riuscita.');}finally{if(mounted.current&&request===requestId.current)setLoading(false);}},[cfg.slug]);
   // `now` starts at 0 so the server and client agree on the first paint; the real
   // clock can only be read after hydration.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(()=>{mounted.current=true;refresh();setNow(Date.now());const tick=setInterval(()=>{setNow(Date.now());if(document.visibilityState==='visible')refresh();},60000);const onVisible=()=>{if(document.visibilityState==='visible')refresh();};document.addEventListener('visibilitychange',onVisible);return()=>{mounted.current=false;clearInterval(tick);document.removeEventListener('visibilitychange',onVisible)}},[refresh]);
+  useEffect(()=>{let active=true;(async()=>{
+    try{const res=await fetch(`/api/serie-a/sync?league=${encodeURIComponent(cfg.slug)}`,{cache:'no-store'});
+      const body=await res.json() as {rounds?:{round:number;final:boolean}[]};
+      if(active)setSerieA(res.ok?body.rounds??[]:[]);}
+    catch{if(active)setSerieA([]);}
+  })();return()=>{active=false};},[cfg.slug]);
+  // Una sola volta, quando archivio e giornate sono arrivati: dopo comanda la scelta dell'utente,
+  // e il refresh ogni minuto non deve riportarlo altrove mentre sta guardando.
+  useEffect(()=>{
+    if(defaulted.current||!data||!serieA)return;
+    defaulted.current=true;
+    const lastRead=Math.max(1,...(data.snapshots.length?data.snapshots.map(s=>s.round):[1]));
+    setRound(String(monitoredRound(cfg,serieA,lastRead)));
+  },[cfg,data,serieA]);
   const byRound=latestByRound(data?.snapshots??[]),current=byRound.get(Number(round));
   const rows=current?.teams??[];
   const stale=current&&now-Date.parse(current.observed_at)>15*60*1000;

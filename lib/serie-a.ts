@@ -86,6 +86,20 @@ export function currentSourceSeason(now=new Date()):string{
   return `${start}-${String((start+1)%100).padStart(2,'0')}`;
 }
 
+// La giornata che il monitor deve mostrare aprendosi: la prima non ancora conclusa. "Conclusa"
+// vuol dire che i voti della sua giornata di Serie A sono definitivi — lo stesso `final` che
+// l'import scrive — quindi una giornata in corso resta quella da guardare, e appena i voti
+// escono il monitor passa alla successiva. Senza dati di campionato si resta sul ripiego, che
+// il chiamante calcola dall'archivio: meglio l'ultima giornata letta che sempre la prima.
+export function monitoredRound(cfg:{serieAOffset:number;roundCount:number},
+  serieA:readonly {round:number;final:boolean}[],fallback=1):number{
+  const clamp=(n:number)=>Math.min(cfg.roundCount,Math.max(1,n));
+  if(!serieA.length)return clamp(fallback);
+  const settled=new Set(serieA.filter(r=>r.final).map(r=>r.round));
+  for(let round=1;round<=cfg.roundCount;round++)if(!settled.has(round+cfg.serieAOffset))return round;
+  return cfg.roundCount;
+}
+
 // What is still worth asking the source for: everything not already settled. A round stays in
 // the list while it is being played, and leaves it for good the moment it is final.
 export function pendingRounds(stored:readonly {round:number;final:boolean}[],lastRound=38):number[] {

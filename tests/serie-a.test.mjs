@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {currentSourceSeason,parseLiveRound,pendingRounds,roundHasStarted,sourceSeason} from '../lib/serie-a.ts';
+import {currentSourceSeason,monitoredRound,parseLiveRound,pendingRounds,roundHasStarted,sourceSeason} from '../lib/serie-a.ts';
 
 const fixture=async round=>JSON.parse(await readFile(new URL(`./fixtures/serie-a/live-${round}.json`,import.meta.url),'utf8'));
 const first=await fixture(1),fifth=await fixture(5);
@@ -85,4 +85,26 @@ test('a settled round is never asked for again, a live one is',()=>{
  assert.deepEqual(pendingRounds([{round:1,final:true},{round:2,final:false}],5),[2,3,4,5]);
  assert.deepEqual(pendingRounds([],3),[1,2,3]);
  assert.deepEqual(pendingRounds([{round:1,final:true},{round:2,final:true}],2),[]);
+});
+
+test('il monitor si apre sulla prima giornata non ancora conclusa',()=>{
+ // Giornata di lega + 3 = giornata di Serie A, come nella lega reale.
+ const cfg={serieAOffset:3,roundCount:35};
+ const upTo=(serieARound,final=true)=>Array.from({length:serieARound},(_,i)=>({round:i+1,final:final||i+1<serieARound}));
+ // 1) la giornata 2 è finita → si apre sulla 3
+ assert.equal(monitoredRound(cfg,upTo(5)),3);
+ // 2) la giornata 3 è in corso → resta la 3
+ assert.equal(monitoredRound(cfg,[...upTo(5),{round:6,final:false}]),3);
+ // 3) la giornata 3 si è conclusa → si apre sulla 4
+ assert.equal(monitoredRound(cfg,upTo(6)),4);
+ // Nessun dato di campionato: si usa il ripiego che arriva dall'archivio.
+ assert.equal(monitoredRound(cfg,[],2),2);
+ assert.equal(monitoredRound(cfg,[]),1);
+ // Un ripiego fuori scala non porta il monitor su una giornata che non esiste.
+ assert.equal(monitoredRound(cfg,[],99),35);
+ assert.equal(monitoredRound(cfg,[],0),1);
+ // Stagione finita: si resta sull'ultima.
+ assert.equal(monitoredRound(cfg,upTo(38)),35);
+ // Una lega senza scarto legge la giornata di Serie A come la propria.
+ assert.equal(monitoredRound({serieAOffset:0,roundCount:38},upTo(2)),3);
 });

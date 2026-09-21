@@ -224,6 +224,13 @@ superato — la storia git li conserva, il repo no.
 - `proxy.ts` è il middleware di Next 16 (esporta `proxy`, non `middleware`) e copre `/`,
   `/login`, `/l/*`, `/api/*`. Nuove route protette vanno aggiunte al `matcher`: se manca,
   i cookie Supabase smettono di rinfrescarsi e compaiono 401 sporadici dopo circa un'ora.
+- Il monitor si apre sulla **prima giornata non ancora conclusa** (`monitoredRound`), dove
+  "conclusa" è il `final` delle giornate di Serie A importate: una giornata in corso resta quella
+  da guardare, e appena escono i voti si passa alla successiva. Il default si applica **una volta
+  sola**, alla prima lettura riuscita: dopo comanda la scelta dell'utente, e il refresh ogni
+  minuto non deve riportarlo altrove mentre sta guardando. Senza dati di campionato si ripiega
+  sull'ultima giornata presente in archivio. È una regola diversa da `fm_current_round_for_bot`,
+  che serve al bot e ha la sua finestra di 24h: non unificarle senza un motivo.
 - `TabQueryBridge` ripristina la tab facendo **DOM scraping** sulle label italiane dei
   bottoni `.main-tabs`, ed è attivo solo su `/l/{slug}`. Da qui due vincoli: **mai mettere il
   nome della lega dentro una label di tab**, e non convertire gli `<a>` in `<Link>` — l'effect
