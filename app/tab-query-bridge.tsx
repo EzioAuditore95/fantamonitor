@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 // The tabs the bottom nav can ask for. Validating against this list is not decoration:
 // the value is interpolated into a CSS selector below, and a raw query parameter there
 // would be a selector injection.
-const TABS=['monitor','penalties','history','competition'];
+const TABS=['home','monitor','penalties','history','competition'];
 
 export default function TabQueryBridge(){
   const pathname=usePathname();

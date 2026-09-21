@@ -240,7 +240,8 @@ textarea {
   gap: 3px;
   color: var(--fm-muted);
   border-radius: 16px;
-  font-size: .61rem;
+  /* Six columns of ~54px at 375px: .61rem no longer fits the longest short label. */
+  font-size: .57rem;
   line-height: 1.05;
   font-weight: 700;
 }
