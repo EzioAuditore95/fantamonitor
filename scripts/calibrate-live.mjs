@@ -234,9 +234,14 @@ export async function loadFixtures(){
   const files=await readdir(FIXTURES);
   const numbers=files.filter(f=>/^live-\d+\.json$/.test(f)).map(f=>Number(f.match(/\d+/)[0])).sort((a,b)=>a-b);
   const rounds=[];
-  for(const round of numbers)rounds.push({round,
-    live:JSON.parse(await readFile(join(FIXTURES,`live-${round}.json`),'utf8')),
-    votes:JSON.parse(await readFile(join(FIXTURES,`votes-${round}.json`),'utf8'))});
+  // A round with no votes fixture is one there was nothing to cross-check against — a round
+  // published but not yet played, for instance. Skipped, not an error.
+  for(const round of numbers){
+    if(!files.includes(`votes-${round}.json`))continue;
+    rounds.push({round,
+      live:JSON.parse(await readFile(join(FIXTURES,`live-${round}.json`),'utf8')),
+      votes:JSON.parse(await readFile(join(FIXTURES,`votes-${round}.json`),'utf8'))});
+  }
   const season=JSON.parse(await readFile(join(FIXTURES,'season-stats.json'),'utf8'));
   return {rounds,season};
 }

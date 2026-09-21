@@ -62,3 +62,6 @@ __pycache__/
 supabase/.temp/
 
 .repro/
+
+# File personali lasciati nella cartella di lavoro: non devono mai finire nel repo.
+*.rtf

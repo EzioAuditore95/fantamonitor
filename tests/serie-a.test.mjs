@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {currentSourceSeason,parseLiveRound,pendingRounds,sourceSeason} from '../lib/serie-a.ts';
+import {currentSourceSeason,parseLiveRound,pendingRounds,roundHasStarted,sourceSeason} from '../lib/serie-a.ts';
 
 const fixture=async round=>JSON.parse(await readFile(new URL(`./fixtures/serie-a/live-${round}.json`,import.meta.url),'utf8'));
 const first=await fixture(1),fifth=await fixture(5);
@@ -52,6 +52,17 @@ test('the feed may grow fields, but not lose the ones we read',()=>{
  assert.equal(parseLiveRound(grown,'2026-27',1).grades.length,1);
  assert.throws(()=>parseLiveRound({data:{pl:[{id:'x'}],inc:[]}},'2026-27',1));
  assert.throws(()=>parseLiveRound({},'2026-27',1));
+});
+
+test('a round whose fixtures are out but nobody has played is not an error',async()=>{
+ // Round 6 as the feed served it on 21/09: ten matches dated in October, zero players. Asking
+ // the database to store it raised invalid_grades and took a whole import run down with it.
+ const future=parseLiveRound(await fixture(6),'2026-27',6);
+ assert.equal(future.matches.length,10);
+ assert.deepEqual(future.grades,[]);
+ assert.equal(future.final,false);
+ assert.equal(roundHasStarted(future),false);
+ assert.equal(roundHasStarted(round1),true);
 });
 
 test('the two season vocabularies are translated, never mixed',()=>{

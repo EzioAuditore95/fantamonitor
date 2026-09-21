@@ -64,6 +64,11 @@ export function parseLiveRound(input:unknown,season:string,round:number):SerieAR
   };
 }
 
+// The feed publishes a round's fixtures before anyone plays them: ten matches with `sto` 0 and
+// an empty player list. There is nothing to grade yet, and since rounds are published in order
+// this is where a run ends — not an error, just the future.
+export const roundHasStarted=(payload:SerieARoundPayload)=>payload.grades.length>0;
+
 // fm_leagues says '2026-2027', the source says '2026-27'. Two vocabularies, translated at the
 // border rather than merged: fm_serie_a_* stores the source's, and only this function knows both.
 export function sourceSeason(season:string):string{

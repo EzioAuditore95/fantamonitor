@@ -327,6 +327,10 @@ superato — la storia git li conserva, il repo no.
 - Nei cancelli in PL/pgSQL **coalescere sempre l'autorizzatore**: `if not (null or false)` non
   solleva niente e lascia passare. È successo davvero, con uno stub di test che restituiva NULL
   al posto di false; ora c'è un test che installa un autorizzatore NULL e pretende il rifiuto.
+- Il feed pubblica il **calendario di una giornata prima che la si giochi**: dieci partite con
+  `sto = 0` e la lista giocatori **vuota**. Non è un errore, è il futuro — `roundHasStarted`
+  chiude lì la passata. Prima della correzione la RPC rifiutava (`invalid_grades`, giustamente)
+  e l'eccezione faceva fallire l'intero import in produzione dopo aver già scritto 1-5.
 - **Una giornata definitiva non si reimporta**: `round_already_final`. Il feed continua a
   servire una giornata finita, e reimportarla potrebbe solo sostituire una correzione della
   redazione con la lettura live che l'aveva preceduta. Finché è in corso, invece, ogni import

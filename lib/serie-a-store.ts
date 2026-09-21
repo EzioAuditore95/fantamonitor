@@ -1,6 +1,6 @@
 import { createClient } from './supabase/server';
 import { liveRoundUrl } from './serie-a-events.ts';
-import { parseLiveRound,pendingRounds,type SerieARoundPayload } from './serie-a.ts';
+import { parseLiveRound,pendingRounds,roundHasStarted,type SerieARoundPayload } from './serie-a.ts';
 import type { PlayerRound } from './player-performance.ts';
 import { parseSeasonStats,seasonStatsUrl,type SeasonTotals } from './serie-a-history.ts';
 
@@ -11,7 +11,7 @@ const FETCH_TIMEOUT=15_000;
 // is better than one request that dies halfway through a Vercel function's budget.
 const MAX_ROUNDS_PER_RUN=8;
 
-export type RoundOutcome={round:number;status:'imported'|'already_final'|'not_published';final?:boolean;grades?:number};
+export type RoundOutcome={round:number;status:'imported'|'already_final'|'not_published'|'not_started';final?:boolean;grades?:number};
 
 // Without a session the table is unreadable — the read policy is for `authenticated` — so the
 // unattended run asks the same key for the same answer instead of the read policy opening to anon.
@@ -56,7 +56,11 @@ export async function syncSerieA(season:string,accessKey?:string):Promise<{round
   for(const round of pending.slice(0,MAX_ROUNDS_PER_RUN)){
     const raw=await fetchLiveRound(round);
     if(!raw){rounds.push({round,status:'not_published'});return {rounds,remaining:0};}
-    rounds.push(await importRound(parseLiveRound(raw,season,round),accessKey));
+    const payload=parseLiveRound(raw,season,round);
+    // A round whose fixtures are out but which nobody has played yet ends the run: the database
+    // refuses a round with no grades, and it is right to — there is nothing in it.
+    if(!roundHasStarted(payload)){rounds.push({round,status:'not_started'});return {rounds,remaining:0};}
+    rounds.push(await importRound(payload,accessKey));
   }
   return {rounds,remaining:Math.max(0,pending.length-rounds.length)};
 }
