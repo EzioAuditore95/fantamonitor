@@ -39,13 +39,15 @@ Browser ──► Next.js App Router (app/)
              ├─ proxy.ts            middleware Next 16: rinnova i cookie Supabase
              ├─ app/auth.ts         getAppUser() · requireLeagueMember(slug)
              ├─ app/l/[slug]/*      dashboard, stats, lineup-analytics della lega
-             ├─ app/api/*/route.ts  archive · reviews · sync · schedule · performance · auth/logout
+             ├─ app/api/*/route.ts  archive · reviews · sync · schedule · performance ·
+             │                     players · serie-a/sync · serie-a/history · auth/logout
              └─ lib/*               modello Zod, regole penalità, calcoli, client Supabase
                         │
                         ▼
               Supabase (Postgres + Auth + RLS)
               fm_leagues / fm_league_teams / fm_memberships = configurazione e scope
               tabelle fm_* con league_id  ·  RPC fm_import_observations / fm_save_review / fm_*_auto_sync
+              fm_serie_a_* = dati di campionato, **senza league_id**, in lettura a ogni utente
                         ▲
                         │  (auto-sync: Supabase REST + chiave SHA-256)
               Connettore Railway (connector/, Node + Playwright)
@@ -57,7 +59,7 @@ Browser ──► Next.js App Router (app/)
 ### Livelli
 
 - **`app/`** — pagine RSC + componenti client densi. `app/l/[slug]/` contiene dashboard,
-  `stats/` e `lineup-analytics/` della lega; `app/page.tsx` reindirizza alla lega dell'utente
+  `stats/`, `lineup-analytics/` e `players/` della lega; `app/page.tsx` reindirizza alla lega dell'utente
   (o mostra il selettore). La `LeagueConfig` arriva ai componenti client **come prop da RSC**,
   non da un context né da un endpoint. La UI è a tab (`Dashboard`) più due route secondarie
   con `global-bottom-nav` e `tab-query-bridge` per il ritorno alla tab richiesta.
@@ -76,6 +78,26 @@ Browser ──► Next.js App Router (app/)
     `open()` sta qui solo per tenere il formato in un posto e per il test di andata e
     ritorno: **la web app non deve mai chiamarla con una chiave reale.**
   - `performance.ts` / `lineup-analytics.ts` — calcoli puri, nessun I/O.
+  - `serie-a-events.ts` — vocabolario del feed live pubblico di Fantacalcio (voti sentinella,
+    stato della giornata, codici evento, pesi Classic). **Tabella derivata, non trascritta**:
+    la produce `scripts/calibrate-live.mjs` e la riverifica `tests/serie-a-events.test.mjs`.
+  - `serie-a.ts` — lettura pura del feed: Zod (**non** `.strict()`, è un documento altrui),
+    conversione stagione `2026-2027` ⇄ `2026-27`, giornate ancora da chiedere.
+  - `serie-a-history.ts` — parser puro delle stagioni passate dalla pagina statistiche. Sono
+    **totali**, non giornate: per questo non finiscono in `fm_serie_a_grades`.
+  - `serie-a-store.ts` — l'unico I/O della feature: scarica il bucket pubblico e chiama
+    `fm_import_serie_a_round`. Niente credenziali, niente connettore, niente Playwright.
+  - `player-performance.ts` — fantavoto e totali per giocatore, puro e **parametrico sulla
+    lega**: `scoringFor(cfg)` legge `cfg.rules.scoring` e ricade su Classic. Il test confronta
+    media e fantamedia con quelle pubblicate da Fantacalcio su ~440 giocatori.
+  - `lineup-performance.ts` — incrocio fra le formazioni archiviate e i voti: punti degli
+    schierati, panchina, rimpianti, rendimento dei più schierati. Puro; la traduzione
+    giornata di lega → giornata di Serie A avviene **solo qui** (`serieAOffset`).
+- **`scripts/`** — utilità da riga di comando, fuori dalla build. Si eseguono con
+  `node --experimental-strip-types`, perché importano moduli `lib/*.ts`. `calibrate-live.mjs` scarica
+  feed live, pagina voti e pagina statistiche, incrocia le tre fonti e stampa la tabella dei
+  codici con i rispettivi pesi; con `--offline` la ricava dalle fixture in
+  `tests/fixtures/serie-a/` (campione di 5 giornate, non un archivio).
 - **`supabase/migrations/`** — sorgente di verità dello schema. Le RPC leggono i limiti da
   `fm_leagues` e replicano in SQL la validazione fatta in Zod; `lib/league.ts` legge la
   stessa riga tramite `leagueConfigFromRows`.
@@ -231,6 +253,21 @@ superato — la storia git li conserva, il repo no.
 - `tests/postgres.test.mjs` esegue le migrazioni in PGlite con ruoli e `auth.uid()`
   simulati: **ogni nuova migrazione deve poter girare lì**, quindi niente costrutti
   esclusivi di Supabase non emulabili. Usa `prototype/tests/fixture.json` come snapshot valido.
+- Nelle pagine di Fantacalcio l'URL di un calciatore **cambia forma fra stagione corrente e
+  passata**: `.../osimhen/4661` contro `.../osimhen/4661/2022-23`. Ancorare l'id alla fine
+  dell'href faceva parsare zero righe **in silenzio**, che è il modo peggiore di rompersi.
+- Lo storico è l'**unico HTML che l'app legge a runtime**; tutto il resto passa dal bucket JSON.
+  Se la pagina statistiche cambia, `importSeason` fallisce con `serie_a_history_empty` invece di
+  svuotare una stagione già archiviata, e una stagione ancora in corso è rifiutata
+  (`season_is_live`): totali e giornate descrivono gli stessi mesi e solo le seconde si possono
+  ricomporre dai pezzi.
+- La scheda calciatori disegna l'andamento con **barre CSS**, non con recharts: `components/ui/chart.tsx`
+  è vendorizzato ma non lo usa nessuna pagina, e `stats-view` fa già le sue sparkline così. Una
+  giornata senza voto è una **barra vuota**, non una barra corta: 3px di gradiente direbbero zero.
+- La copia in `/private/tmp` per aggirare il blocco TCC **non basta più da sola**: il pannello
+  browser rifiuta una `cwd` fuori dalla radice di progetto (`cwd must be a relative path within
+  the project root`), e la radice è proprio la cartella bloccata. Per vedere le pagine a schermo
+  serve `npm run dev` da un terminale dell'utente, che TCC non blocca.
 - I dialog e i drawer stanno a `z-index` 90/91 e le tendine portate a 100, sopra tutta la
   cromatura del tema (topbar 50, barra tab 60, FAB 70, bottom nav 80). Serviva: prima erano
   tutti sotto la barra delle tab. **Attenzione però**: il guasto non si riproduce in
@@ -276,6 +313,42 @@ superato — la storia git li conserva, il repo no.
   più il primo scaffolding). Sono state riallineate con `supabase migration repair` il
   19/09: da lì in poi `db push` è di nuovo utilizzabile, ma quelle voci restano nella
   tabella e non hanno un file corrispondente.
+- Le tabelle `fm_serie_a_*` sono l'unica eccezione allo scope per lega, ed è voluta: un voto di
+  Modric è della Serie A, non di una lega. Lettura aperta a ogni utente autenticato, scrittura
+  solo via `fm_import_serie_a_round`, che chiede di essere **admin di una lega qualsiasi** —
+  non c'è una lega di cui essere admin. La stagione è nel formato della fonte (`2026-27`), non
+  in quello di `fm_leagues` (`2026-2027`): si traduce al confine, non si mescolano.
+- L'import dei voti ha **due porte**, e non è ridondanza: l'admin con sessione (il pulsante in
+  Gestione) e la chiave del cron (`CRON_SECRET` su Vercel, digest in migrazione, diversa da
+  `AUTO_SYNC_DB_SECRET`). La route non confronta niente, passa il bearer alla RPC: l'autorità è
+  il database. Il cron non ha lega da cui leggere la stagione e la ricava dal calendario
+  (`currentSourceSeason`, luglio è il confine), e legge lo stato delle giornate da
+  `fm_serie_a_rounds_for_import` invece di aprire la policy di lettura ad `anon`.
+- Nei cancelli in PL/pgSQL **coalescere sempre l'autorizzatore**: `if not (null or false)` non
+  solleva niente e lascia passare. È successo davvero, con uno stub di test che restituiva NULL
+  al posto di false; ora c'è un test che installa un autorizzatore NULL e pretende il rifiuto.
+- **Una giornata definitiva non si reimporta**: `round_already_final`. Il feed continua a
+  servire una giornata finita, e reimportarla potrebbe solo sostituire una correzione della
+  redazione con la lettura live che l'aveva preceduta. Finché è in corso, invece, ogni import
+  sostituisce il precedente per intero.
+- Il feed live di Fantacalcio è **dato in diretta, non il verbale della partita**: su ~1400
+  giudizi calibrati uno non coincide con la pagina voti (una ammonizione che la redazione ha
+  poi tolto). L'ingestione deve reggere quello scarto, non negarlo — e una giornata si
+  considera definitiva solo quando **tutte** le sue partite hanno `sto = 4`, non per orario.
+- Nel feed **non esiste un evento "porta inviolata"**: il clean sheet si deduce dai gol
+  subiti a zero (`keptCleanSheet`: portiere, votato, nessun codice 4). Classic non lo paga —
+  vale solo se la lega lo dichiara in `rules.scoring.cleanSheet`.
+- **Il punteggio ufficiale di una squadra non si ricalcola, si legge.** Riprodurlo richiede il
+  motore delle sostituzioni di Fantacalcio (cambi di modulo compresi): misurato contro dieci
+  risultati veri, il modello ovvio — stesso ruolo, ordine di panchina, più la porta inviolata —
+  ne azzecca quattro e sugli altri sbaglia da 1 a 3 punti. `lineup-performance.ts` prende il
+  totale dal payload di competizione già archiviato e chiama `substitutionGain` la differenza
+  dagli undici schierati. Non trasformarlo in un simulatore senza una prova migliore.
+- Le **presenze possono superare** quelle pubblicate da Fantacalcio: su ~440 giocatori cinque
+  hanno un esordio che il feed vota e la pagina statistiche non conta, perché il giocatore è
+  entrato nella lista ufficiale dopo. La nostra lettura è più completa, la loro è il registro:
+  il test lo tollera in un verso solo (mai meno delle loro) e non va "allineato" in silenzio. I codici 11, 12, 16 e 17 sono visti ma non identificati: valgono 0 e
+  `tests/serie-a-events.test.mjs` fallisce se uno di loro inizia a muovere un fantavoto.
 - Dati reali (`lib/data/`, `prototype/data/`) sono fuori dal repo: non ricrearli né
   committare esempi con nomi o risultati veri.
 

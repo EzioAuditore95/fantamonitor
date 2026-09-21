@@ -1,0 +1,47 @@
+.main{max-width:1180px;margin:0 auto;padding:24px 16px 52px}
+.heroGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:18px 0}
+.heroCard,.tableWrap{border:1px solid rgba(148,203,255,.16);background:rgba(12,23,45,.78);backdrop-filter:blur(18px);box-shadow:0 18px 42px rgba(0,0,0,.18);border-radius:22px}
+.heroCard{padding:18px;display:grid;gap:8px;min-height:150px}
+.heroCard svg{width:20px;height:20px;color:#7dd8ff}
+.heroCard span{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:rgba(225,238,255,.62)}
+.heroCard strong{font-size:20px;line-height:1.1}
+.heroCard small{color:rgba(225,238,255,.58)}
+.filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.filter{border:1px solid rgba(148,203,255,.18);background:rgba(255,255,255,.04);color:rgba(225,238,255,.78);border-radius:999px;padding:7px 14px;font-size:12px;cursor:pointer}
+.filterOn{background:rgba(114,210,255,.16);border-color:rgba(114,210,255,.42);color:#eaf6ff}
+.tableWrap{padding:6px 4px;overflow-x:auto}
+.table{width:100%;border-collapse:collapse;font-size:13px;min-width:680px}
+.table th{text-align:left;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:rgba(225,238,255,.55);padding:12px;font-weight:500}
+.table td{padding:10px 12px;border-top:1px solid rgba(255,255,255,.06)}
+.table th:nth-child(n+3),.table td:nth-child(n+3){text-align:right}
+.table th:last-child,.table td:last-child{text-align:left;width:120px}
+.row{cursor:pointer}
+.row:hover,.row:focus-visible{background:rgba(114,210,255,.08);outline:none}
+.player{display:flex;align-items:center;gap:10px}
+.player img{width:34px;height:34px;border-radius:10px;object-fit:cover;background:rgba(255,255,255,.05)}
+.player strong{display:block;line-height:1.2}
+.player small{color:rgba(225,238,255,.55);font-size:11px}
+.team{display:inline-flex;align-items:center;gap:7px;color:rgba(225,238,255,.8)}
+.team i{width:9px;height:9px;border-radius:50%;flex:none}
+.spark{display:flex;align-items:flex-end;gap:3px;height:28px}
+.spark i{display:block;width:6px;border-radius:2px 2px 0 0;background:linear-gradient(180deg,#69bfff,#49d6c6)}
+/* A round without a grade is not a short bar: an empty slot says "no vote", a 3px bar says zero. */
+.sparkEmpty{background:rgba(255,255,255,.12);height:3px!important}
+.sheet{padding:22px;display:grid;gap:16px;align-content:start;overflow-y:auto}
+.sheetHead{display:flex;gap:12px;align-items:center}
+.sheetHead img{width:56px;height:56px;border-radius:14px;object-fit:cover;background:rgba(255,255,255,.05)}
+.sheetHead strong{font-size:19px;display:block}
+.sheetHead span{color:rgba(225,238,255,.6);font-size:12px}
+.sheetStats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.sheetStats>div{background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:10px;display:grid;gap:3px}
+.sheetStats span{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:rgba(225,238,255,.6)}
+.sheetStats strong{font-size:17px}
+.sheetTable{width:100%;border-collapse:collapse;font-size:13px}
+.sheetTable th{text-align:right;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:rgba(225,238,255,.55);padding:8px;font-weight:500}
+.sheetTable th:first-child,.sheetTable td:first-child{text-align:left}
+.sheetTable td{padding:8px;text-align:right;border-top:1px solid rgba(255,255,255,.06)}
+/* The history is a second block inside the same sheet: it needs its own heading. */
+.kicker{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:rgba(225,238,255,.55);margin-top:2px}
+.sheetNote{margin:0;color:rgba(225,238,255,.55);font-size:11px;line-height:1.5}
+@media(max-width:860px){.heroGrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.main{padding:18px 12px 44px}.heroGrid{gap:10px}.heroCard{padding:14px;min-height:132px}.heroCard strong{font-size:16px}.sheetStats{grid-template-columns:repeat(2,minmax(0,1fr))}}

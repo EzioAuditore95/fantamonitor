@@ -6,6 +6,7 @@ import {pgcrypto} from '@electric-sql/pglite/contrib/pgcrypto';
 import {makeSnapshotSchema} from '../lib/model.ts';
 import {makeReviewInputSchema} from '../lib/penalties.ts';
 import {CHEFANTAVITAE10,leagueConfigFromRows,periodForRound,teamNames} from '../lib/league.ts';
+import {parseLiveRound} from '../lib/serie-a.ts';
 const bootstrap=`create schema extensions; create extension pgcrypto with schema extensions;
 create role anon; create role authenticated; create role service_role bypassrls;
 create schema auth;create table auth.users(id uuid primary key);
@@ -471,4 +472,171 @@ test('the connector can store a session and team ids for one league only',async(
  assert.equal(ids[0].fantacalcio_team_id,555);
  assert.equal((await db.query('select count(*)::int as n from fm_league_teams where fantacalcio_team_id is not null and league_id=$1',[ALPHA])).rows[0].n,0);
 });
+// ---------------------------------------------------------------- Serie A grades
+// Championship data, deliberately outside the league scope: every signed-in user reads the
+// same rows, and being admin of any league is what buys the right to write them.
+const serieARound=(round,over=true,extra={})=>({season:'2026-27',round,final:over,
+ matches:[{match_id:17995,home_team_id:2,away_team_id:18,home_goals:1,away_goals:1,kickoff:'2026-09-19T13:00:00Z',status:over?4:3},
+  {match_id:17996,home_team_id:1,away_team_id:3,home_goals:0,away_goals:2,kickoff:'2026-09-19T16:00:00Z',status:4}],
+ teams:[{id:1,name:'Atalanta'},{id:2,name:'Bologna'},{id:3,name:'Roma'},{id:18,name:'Torino'}],
+ players:[{id:133,name:'Skorupski',role:'P',team_id:2},{id:5585,name:'Malen',role:'A',team_id:3}],
+ grades:[{player_id:133,team_id:2,state:'graded',grade:5,events:[4],minutes:[77],status:4,presence_odds:100},
+  {player_id:5585,team_id:3,state:'graded',grade:7.1,events:[3,22],minutes:[12,40],status:4,presence_odds:100}],
+ ...extra});
+const importRound=(user,payload)=>asUser(user,'select fm_import_serie_a_round($1::jsonb) as r',[JSON.stringify(payload)]);
+
+test('Serie A rows are read by every member and written by no one directly',async()=>{
+ await importRound(alphaAdmin,serieARound(4));
+ for(const user of [alphaViewer,betaViewer,bothUser])
+  assert.equal((await asUser(user,'select count(*)::int as n from fm_serie_a_grades')).rows[0].n,2,'a member of any league reads the championship');
+ assert.equal((await asUser(stranger,'select count(*)::int as n from fm_serie_a_grades')).rows[0].n,2,'nothing here is league scoped');
+ await assert.rejects(asUser(alphaAdmin,"insert into fm_serie_a_teams values (99,'Direttamente')"),/permission denied/);
+ await assert.rejects(asUser(alphaAdmin,"update fm_serie_a_grades set grade=10"),/permission denied/);
+});
+test('importing a round stores grades, matches, players and teams together',async()=>{
+ const result=(await importRound(alphaAdmin,serieARound(5))).rows[0].r;
+ assert.deepEqual(result,{season:'2026-27',round:5,final:true,grades:2,matches:2});
+ const grade=(await asUser(alphaViewer,"select * from fm_serie_a_grades where round=5 and player_id=5585")).rows[0];
+ assert.equal(Number(grade.grade),7.1);
+ assert.deepEqual(grade.events,[3,22]);
+ assert.deepEqual(grade.minutes,[12,40]);
+ assert.equal((await asUser(alphaViewer,"select name from fm_serie_a_players where id=133")).rows[0].name,'Skorupski');
+ assert.equal((await asUser(alphaViewer,'select count(*)::int as n from fm_serie_a_teams')).rows[0].n,4,'four clubs, read off two matches, each named once');
+ assert.equal((await asUser(alphaViewer,'select final from fm_serie_a_rounds where round=5')).rows[0].final,true);
+});
+test('only an admin of some league may import, whichever league it is',async()=>{
+ await assert.rejects(importRound(alphaViewer,serieARound(6)),/unauthorized/);
+ await assert.rejects(importRound(stranger,serieARound(6)),/unauthorized/);
+ // Beta's admin is admin of nothing in Serie A, and that is precisely the point: the table
+ // has no owner, so the gate only separates who may write from who may read.
+ assert.equal((await importRound(betaAdmin,serieARound(6))).rows[0].r.round,6);
+});
+test('a round is final only when every one of its matches is over',async()=>{
+ await assert.rejects(importRound(alphaAdmin,{...serieARound(7,false),final:true}),/invalid_final/);
+ await assert.rejects(importRound(alphaAdmin,{...serieARound(7,true),final:false}),/invalid_final/);
+ assert.equal((await importRound(alphaAdmin,serieARound(7,false))).rows[0].r.final,false);
+ assert.equal((await asUser(alphaViewer,'select final from fm_serie_a_rounds where round=7')).rows[0].final,false);
+});
+test('a live round is re-read until it settles, and a settled one is never re-read',async()=>{
+ // Round 7 is still being played: a second reading replaces the first instead of adding to it.
+ const later=serieARound(7,false);
+ later.grades=[{player_id:133,team_id:2,state:'no_vote',grade:null,events:[15],minutes:[81],status:4,presence_odds:100}];
+ assert.equal((await importRound(alphaAdmin,later)).rows[0].r.grades,1);
+ const rows=(await asUser(alphaViewer,'select player_id,state from fm_serie_a_grades where round=7')).rows;
+ assert.deepEqual(rows,[{player_id:133,state:'no_vote'}],'the superseded reading is gone, not kept alongside');
+ // Once every match is over the round is settled, and the feed keeps serving it forever.
+ await importRound(alphaAdmin,serieARound(7,true));
+ await assert.rejects(importRound(alphaAdmin,serieARound(7,true)),/round_already_final/);
+ await assert.rejects(importRound(alphaAdmin,serieARound(7,false)),/round_already_final/);
+});
+test('a grade without a vote is a state, never a zero',async()=>{
+ const bad=(patch)=>importRound(alphaAdmin,{...serieARound(8),grades:[{player_id:133,team_id:2,state:'graded',grade:6,events:[],minutes:[],status:4,...patch}]});
+ await assert.rejects(bad({state:'no_vote'}),/invalid_state/,'no vote with a grade attached');
+ await assert.rejects(bad({state:'graded',grade:null}),/invalid_state/,'graded with no grade');
+ await assert.rejects(bad({state:'boh'}),/invalid_state/);
+ await assert.rejects(bad({events:[4,'x']}),/invalid_events/);
+ await assert.rejects(bad({events:[400]}),/invalid_events/);
+ await assert.rejects(importRound(alphaAdmin,{...serieARound(8),season:'2026-2027'}),/invalid_season/,'the league season format is not this table\'s');
+ await assert.rejects(importRound(alphaAdmin,{...serieARound(8),round:39}),/invalid_round/);
+ await assert.rejects(importRound(alphaAdmin,{...serieARound(8),matches:[]}),/invalid_matches/);
+ await assert.rejects(importRound(alphaAdmin,{...serieARound(8),grades:[]}),/invalid_grades/);
+});
+test('a player carries one identity across the rounds he appears in',async()=>{
+ const moved=serieARound(9);
+ moved.players=[{id:5585,name:'Malen',role:'A',team_id:2}];
+ moved.grades=[{player_id:5585,team_id:2,state:'did_not_play',grade:null,events:[],minutes:[],status:4,presence_odds:0}];
+ await importRound(alphaAdmin,moved);
+ const rows=(await asUser(alphaViewer,'select count(*)::int as n from fm_serie_a_players where id=5585')).rows;
+ assert.equal(rows[0].n,1,'the row is updated, not duplicated per round');
+ assert.equal((await asUser(alphaViewer,'select team_id from fm_serie_a_players where id=5585')).rows[0].team_id,2);
+ const spread=(await asUser(alphaViewer,'select count(*)::int as n,count(distinct round)::int as rounds from fm_serie_a_grades where player_id=5585')).rows[0];
+ assert.equal(spread.n,spread.rounds,'one grade per round, however many rounds he has played');
+});
+
+test('a real round from the feed is accepted exactly as the parser hands it over',async()=>{
+ // The one place where the two halves of this feature meet: what lib/serie-a.ts produces from a
+ // captured feed has to satisfy every constraint the migration declares, with nothing in between.
+ const raw=JSON.parse(await readFile(new URL('./fixtures/serie-a/live-1.json',import.meta.url),'utf8'));
+ const payload=parseLiveRound(raw,'2026-27',20);
+ const result=(await asUser(alphaAdmin,'select fm_import_serie_a_round($1::jsonb) as r',[JSON.stringify(payload)])).rows[0].r;
+ assert.deepEqual(result,{season:'2026-27',round:20,final:true,grades:549,matches:10});
+ assert.equal((await asUser(alphaViewer,'select count(*)::int as n from fm_serie_a_grades where round=20')).rows[0].n,549);
+ assert.equal((await asUser(alphaViewer,'select count(distinct team_id)::int as n from fm_serie_a_grades where round=20')).rows[0].n,20);
+ const keeper=(await asUser(alphaViewer,'select * from fm_serie_a_grades where round=20 and player_id=133')).rows[0];
+ assert.equal(Number(keeper.grade),6);
+ assert.deepEqual(keeper.events,[4]);
+ const unrated=(await asUser(alphaViewer,"select count(*)::int as n from fm_serie_a_grades where round=20 and state='no_vote' and grade is null")).rows[0].n;
+ assert.equal(unrated,26,'players who came on too late are stored as a state, and the check constraint accepts them');
+});
+
+test('the scheduled importer has a key of its own, and it is not the connector\'s',async()=>{
+ assert.equal((await db.query("select public.fm_serie_a_import_authorized('chiave-sbagliata') as ok")).rows[0].ok,false);
+ assert.equal((await db.query("select public.fm_serie_a_import_authorized('') as ok")).rows[0].ok,false);
+ assert.equal((await db.query("select public.fm_serie_a_import_authorized(null) as ok")).rows[0].ok,false);
+ // Two doors, two secrets: one opens the league's own data through the connector, the other a
+ // public championship table. Sharing a digest would let either stand in for the other. Read from
+ // the migrations, not from pg_proc: the auto-sync gate is stubbed above to be testable at all.
+ const digestOf=async suffix=>(await sqlOf(migrations.find(name=>name.endsWith(suffix)))).match(/[0-9a-f]{64}/)?.[0];
+ const autoSync=await digestOf('_round_schedule_auto_sync.sql'),serieA=await digestOf('_serie_a_import_key.sql');
+ assert.equal(autoSync?.length,64);assert.equal(serieA?.length,64);
+ assert.notEqual(autoSync,serieA);
+});
+test('with its key the importer writes without a session, and without it nothing does',async()=>{
+ const KEY='chiave-serie-a-di-test';
+ await db.exec(`create or replace function public.fm_serie_a_import_authorized(access_key text) returns boolean
+  language sql immutable security definer set search_path='' as $$ select coalesce(access_key,'')='${KEY}' $$;`);
+ // The claim, not the role, is what says who is asking: a security definer function reads
+ // auth.uid(), so leaving the previous test's subject set would let anon inherit his leagues.
+ const asAnon=async(sql,args=[])=>{await db.exec('set role anon');await db.query("select set_config('request.jwt.claim.sub','',false)");
+  try{return await db.query(sql,args);}finally{await db.exec('reset role');}};
+ const payload=JSON.stringify(serieARound(12));
+ await assert.rejects(asAnon('select fm_import_serie_a_round($1::jsonb) as r',[payload]),/unauthorized/,'no session and no key opens nothing');
+ await assert.rejects(asAnon('select fm_import_serie_a_round($1::jsonb,$2) as r',[payload,'chiave-sbagliata']),/unauthorized/);
+ assert.equal((await asAnon('select fm_import_serie_a_round($1::jsonb,$2) as r',[payload,KEY])).rows[0].r.round,12);
+ // An authorizer that answers NULL must not open anything either: this is the shape the gate
+ // had until a stub returning NULL walked straight through it.
+ await db.exec(`create or replace function public.fm_serie_a_import_authorized(access_key text) returns boolean
+  language sql immutable security definer set search_path='' as $$ select null::boolean $$;`);
+ await assert.rejects(asAnon('select fm_import_serie_a_round($1::jsonb,$2) as r',[JSON.stringify(serieARound(15)),KEY]),/unauthorized/);
+ await assert.rejects(asAnon('select fm_serie_a_rounds_for_import($1,$2) as r',[KEY,'2026-27']),/unauthorized/);
+ await db.exec(`create or replace function public.fm_serie_a_import_authorized(access_key text) returns boolean
+  language sql immutable security definer set search_path='' as $$ select coalesce(access_key,'')='${KEY}' $$;`);
+ // The state it needs to know where to resume is behind the same key, so the read policy for
+ // members never has to be opened to anon.
+ await assert.rejects(asAnon('select fm_serie_a_rounds_for_import($1,$2) as r',['chiave-sbagliata','2026-27']),/unauthorized/);
+ const state=(await asAnon('select fm_serie_a_rounds_for_import($1,$2) as r',[KEY,'2026-27'])).rows[0].r;
+ assert.ok(state.some(r=>r.round===12&&r.final===true));
+ assert.equal((await asAnon('select fm_serie_a_rounds_for_import($1,$2) as r',[KEY,'2099-00'])).rows[0].r.length,0);
+ // The first door is untouched: an admin still writes with no key, a viewer still cannot.
+ assert.equal((await importRound(alphaAdmin,serieARound(13))).rows[0].r.round,13);
+ await assert.rejects(importRound(alphaViewer,serieARound(14)),/unauthorized/);
+});
+
+test('a finished season is stored as totals, and only by an admin',async()=>{
+ const season=(patch={})=>({season:'2022-23',players:[
+  {player_id:4661,name:'Osimhen',team:'NAP',role:'A',played:32,grade:6.73,fantasyGrade:9.14,goals:26,conceded:0,penaltiesSaved:0,assists:4,yellow:4,red:0,ownGoals:null},
+  {player_id:99999,name:'Ritirato',team:'XXX',role:'C',played:25,grade:6.64,fantasyGrade:8.24,goals:12,conceded:0,penaltiesSaved:0,assists:6,yellow:4,red:0,ownGoals:null}],...patch});
+ const call=(user,payload)=>asUser(user,'select fm_import_serie_a_season($1::jsonb) as r',[JSON.stringify(payload)]);
+ assert.deepEqual((await call(alphaAdmin,season())).rows[0].r,{season:'2022-23',players:2});
+ await assert.rejects(call(alphaViewer,season()),/unauthorized/);
+ // No foreign key to the player table on purpose: a past season is full of players who have
+ // left Serie A and will never appear in the live feed.
+ assert.equal((await asUser(alphaViewer,'select count(*)::int as n from fm_serie_a_players where id=99999')).rows[0].n,0,'he is in no live feed');
+ assert.equal((await asUser(alphaViewer,"select name from fm_serie_a_season_totals where player_id=99999")).rows[0].name,'Ritirato','and stored all the same');
+ assert.equal((await asUser(betaViewer,"select name from fm_serie_a_season_totals where player_id=4661")).rows[0].name,'Osimhen','championship history is not league scoped');
+ // Re-running replaces the season whole: that is what a corrected figure at the source needs.
+ const corrected=season();corrected.players=[{...corrected.players[0],goals:27}];
+ assert.deepEqual((await call(alphaAdmin,corrected)).rows[0].r,{season:'2022-23',players:1});
+ assert.equal((await asUser(alphaViewer,"select goals from fm_serie_a_season_totals where player_id=4661")).rows[0].goals,27);
+ await assert.rejects(call(alphaAdmin,season({season:'2022-2023'})),/invalid_season/);
+ await assert.rejects(call(alphaAdmin,season({players:[]})),/invalid_players/);
+});
+test('a season the feed is still filling is never overwritten by an aggregate',async()=>{
+ // Round 20 of 2026-27 was imported earlier from a real feed: the two describe the same months
+ // and only one of them can be taken apart into rounds again.
+ await assert.rejects(asUser(alphaAdmin,'select fm_import_serie_a_season($1::jsonb) as r',
+  [JSON.stringify({season:'2026-27',players:[{player_id:133,name:'Skorupski',team:'BOL',role:'P',played:5,grade:6,fantasyGrade:5.4,goals:0,conceded:6,penaltiesSaved:0,assists:0,yellow:0,red:0,ownGoals:0}]})]),
+  /season_is_live/);
+});
+
 after(async()=>{await db.close();});
