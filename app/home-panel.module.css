@@ -175,6 +175,25 @@
 .outcomeL { color: var(--fm-red); }
 .outcomeD { color: var(--fm-orange); }
 
+/* The head to head is one line under the duel: it gives the VS a past without pushing the
+   two lineup states, which are the actionable part, further down the card. */
+.h2h {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-bottom: 12px;
+  padding: 7px 10px;
+  border-radius: 12px;
+  background: var(--fm-glass-soft);
+  color: var(--fm-muted);
+  font-size: .73rem;
+}
+
+.h2h svg { flex: none; color: var(--fm-muted); }
+.h2h strong { color: var(--fm-text); font-weight: 750; }
+.h2h small { color: var(--fm-muted); font-size: .69rem; }
+
 .lineupState {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -223,6 +242,79 @@
 
 .kickoff strong { color: var(--fm-text); font-weight: 750; }
 .kickoff svg { flex: none; }
+
+/* The two squads' best, at the foot of the fixture: flavour sits below everything the
+   viewer can act on. Two columns that line up with the duel above them. */
+.top {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--fm-line);
+}
+
+.topKicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--fm-muted);
+  font-size: .64rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.topGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+  margin-top: 8px;
+}
+
+.topSide { min-width: 0; }
+
+.topTitle {
+  display: block;
+  margin-bottom: 4px;
+  overflow: hidden;
+  color: var(--fm-muted);
+  font-size: .68rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topRow {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+  padding: 2px 0;
+  font-size: .74rem;
+}
+
+.topRow small {
+  flex: none;
+  width: 13px;
+  color: var(--fm-muted);
+  font-size: .6rem;
+  font-weight: 800;
+}
+
+.topName {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fm-text-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topRow strong {
+  margin-left: auto;
+  flex: none;
+  color: var(--fm-text);
+  font-weight: 800;
+}
+
+.topEmpty { color: var(--fm-muted); font-size: .72rem; }
 
 /* --- the estimate ---------------------------------------------------------------- */
 
@@ -388,6 +480,76 @@
 
 .recapHead { margin-bottom: 10px; }
 
+/* Best and worst score of the round: the two lines the group chat argues about. */
+.highlights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 6px;
+  font-size: .73rem;
+}
+
+.highlights span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.highlights strong { font-weight: 800; }
+.highBest { color: var(--fm-green); }
+.highWorst { color: var(--fm-muted); }
+
+/* Points left on the bench: the one number that stings, next to what it is measured against. */
+.benchFigures {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.benchFigures span {
+  display: grid;
+  gap: 1px;
+  color: var(--fm-muted);
+  font-size: .68rem;
+}
+
+.benchFigures strong {
+  color: var(--fm-text);
+  font-size: 1.1rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.benchFigures span:first-child strong { color: var(--fm-orange); }
+
+.regrets {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.regret {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 3px 6px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--fm-glass-soft);
+  font-size: .74rem;
+}
+
+.regret svg { flex: none; color: var(--fm-muted); align-self: center; }
+.regret strong { color: var(--fm-text); font-weight: 750; }
+.regret small { color: var(--fm-muted); font-size: .68rem; }
+
+.benchNote {
+  margin-top: 12px;
+  color: var(--fm-muted);
+  font-size: .76rem;
+}
+
 /* --- position, form, tokens ------------------------------------------------------ */
 
 .status {
@@ -425,6 +587,30 @@
   font-size: .76rem;
   line-height: 1.35;
 }
+
+/* What the league already says about the team, in the one place someone will read it. */
+.character {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding: 9px 12px;
+  border: 1px solid var(--fm-line);
+  border-radius: 14px;
+  background: var(--fm-glass-soft);
+  color: var(--fm-muted);
+  font-size: .74rem;
+  text-align: left;
+}
+
+.characterLabel {
+  color: var(--fm-text);
+  font-weight: 800;
+  letter-spacing: .01em;
+}
+
+.character:hover { border-color: var(--fm-line-strong); }
 
 .statusForm { display: inline-flex; gap: 3px; }
 

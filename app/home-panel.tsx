@@ -1,16 +1,19 @@
 'use client';
 import { useEffect,useMemo,useState } from 'react';
-import { CheckCircle2,ChevronRight,Clock3,Coins,Info,TrendingUp,Trophy,TriangleAlert } from 'lucide-react';
+import { CheckCircle2,ChevronRight,Clock3,Coins,Flame,Info,Snowflake,Star,Swords,TrendingUp,Trophy,TriangleAlert,UserRound } from 'lucide-react';
 import Crest from './crest';
 import { useRoundSchedule } from './round-schedule-provider';
+import { usePlayerGrades } from './use-player-grades';
 import { displayDate,type Archive } from '@/lib/model';
 import { periodForRound,teamNames,type LeagueConfig } from '@/lib/league';
 import { euro,teamBalance } from '@/lib/penalties';
 import { computePerformance,type TeamPerformance } from '@/lib/performance';
 import { formatKickoff,formatRemainingCoarse,kickoffFor } from '@/lib/round-schedule';
 import { readStoredTeam,storedTeamKey } from '@/lib/stored-team';
-import { competitionFrom,fixtureFor,hasResults,lineupStateFor,missingLineups,outcomeOf,roundFor,standingFor } from '@/lib/home-view';
+import { characterOf,competitionFrom,fixtureFor,hasResults,headToHead,lineupStateFor,missingLineups,outcomeOf,roundFor,roundHighlights,standingFor } from '@/lib/home-view';
 import { MIN_ROUNDS_FOR_PROBABILITY,roundedSplit,winProbability } from '@/lib/win-probability';
+import { gradesByRound,rosterOf,topFantasyAverages,type TopPlayer } from '@/lib/home-players';
+import { seasonPerformance } from '@/lib/lineup-performance';
 import styles from './home-panel.module.css';
 
 const HOUR=3_600_000;
@@ -21,6 +24,17 @@ function LineupBadge({present,label}:{present:boolean|undefined;label:string}){
   const Icon=present===undefined?Info:present?CheckCircle2:Clock3;
   return <span className={`${styles.state} ${tone}`}><Icon size={15}/><span className={styles.stateWho}>{label}</span>
     <strong>{present===undefined?'nessuna lettura':present?'inserita':'non inserita'}</strong></span>;
+}
+
+function TopThree({title,players,loading}:{title:string;players:TopPlayer[];loading:boolean}){
+  return <div className={styles.topSide}>
+    <span className={styles.topTitle}>{title}</span>
+    {players.length
+      ?players.map(p=><span key={p.id} className={styles.topRow}>
+        <small>{p.role??'—'}</small><span className={styles.topName}>{p.name}</span><strong>{p.fantasyGrade.toFixed(2)}</strong>
+      </span>)
+      :<span className={styles.topEmpty}>{loading?'…':'dati non disponibili'}</span>}
+  </div>;
 }
 
 export default function HomePanel({config,data,round,now,onNavigate,base}:{
@@ -51,7 +65,7 @@ export default function HomePanel({config,data,round,now,onNavigate,base}:{
   const performance=useMemo(()=>competition?computePerformance(TEAM_NAMES,competition):[],[TEAM_NAMES,competition]);
   const perfOf=(name:string|null)=>performance.find((t:TeamPerformance)=>t.name===name)??null;
 
-  const fixture=fixtureFor(competition,round,team??null);
+  const fixture=useMemo(()=>fixtureFor(competition,round,team??null),[competition,round,team]);
   const entry=roundFor(competition,round);
   const outcome=outcomeOf(fixture);
   const kickoff=kickoffFor(schedule,round)?.start_at??null;
@@ -65,6 +79,19 @@ export default function HomePanel({config,data,round,now,onNavigate,base}:{
   const odds=myPerf&&oppPerf?winProbability(myPerf,oppPerf,performance):null;
   const split=odds?roundedSplit(odds):null;
   const standing=standingFor(competition,team??null);
+  const h2h=headToHead(competition,team??null,fixture?.opponent??null);
+  const highlights=roundHighlights(competition,round);
+  const character=characterOf(performance,team??null);
+
+  // Deferred, fetched once: see use-player-grades. Everything below renders without it.
+  const {grades,loading:gradesLoading}=usePlayerGrades(cfg.slug);
+  const opponent=fixture?.opponent??null;
+  const myTop=useMemo(()=>topFantasyAverages(rosterOf(snapshots,team??null),grades),[snapshots,team,grades]);
+  const oppTop=useMemo(()=>topFantasyAverages(rosterOf(snapshots,opponent),grades),[snapshots,opponent,grades]);
+  const bench=useMemo(()=>{
+    if(!grades||!team||!data)return null;
+    return seasonPerformance(cfg,[team],data,gradesByRound(grades),competition).season[0]??null;
+  },[cfg,team,data,grades,competition]);
   const tokens=team?teamBalance(cfg,team,periodForRound(cfg,round).key,data?.reviews??[]):null;
 
   const urgency=!current?styles.urgencyCalm
@@ -105,6 +132,10 @@ export default function HomePanel({config,data,round,now,onNavigate,base}:{
             <p>La giornata {round} comparirà qui appena una sincronizzazione porta il calendario ufficiale.</p>
             <button className={styles.link} onClick={()=>onNavigate('competition')}>Vai alle competizioni<ChevronRight size={14}/></button>
           </div>}
+        {h2h&&<p className={styles.h2h}><Swords size={14}/>
+          <span>Scontri diretti <strong>{h2h.wins}V</strong> <strong>{h2h.draws}N</strong> <strong>{h2h.losses}P</strong></span>
+          {h2h.last&&<small>ultima {h2h.last.goals}–{h2h.last.opponentGoals}{h2h.last.fantasy!=null&&h2h.last.opponentFantasy!=null?` (${fp(h2h.last.fantasy)} a ${fp(h2h.last.opponentFantasy)})`:''}</small>}
+        </p>}
         {/* Without a fixture there is still the one state that is always worth knowing. */}
         <div className={`${styles.lineupState} ${fixture?'':styles.lineupStateSolo}`}>
           <LineupBadge present={mine} label="La tua"/>
@@ -116,6 +147,13 @@ export default function HomePanel({config,data,round,now,onNavigate,base}:{
         {kickoff&&<p className={styles.kickoff}><Clock3 size={15}/>{!outcome&&toKickoff!=null&&toKickoff>0
           ?<>Inizio tra <strong>{formatRemainingCoarse(toKickoff)}</strong> · {formatKickoff(kickoff)}</>
           :<>{outcome?'Giornata conclusa':'Formazioni chiuse · risultati in arrivo'} · {formatKickoff(kickoff)}</>}</p>}
+        {fixture&&(myTop.length||oppTop.length||gradesLoading)&&<div className={styles.top}>
+          <span className={styles.topKicker}><Star size={12}/>Migliori per fantamedia</span>
+          <div className={styles.topGrid}>
+            <TopThree title={fixture.team} players={myTop} loading={gradesLoading}/>
+            <TopThree title={fixture.opponent} players={oppTop} loading={gradesLoading}/>
+          </div>
+        </div>}
         </div>
         {fixture&&!outcome&&<div className={styles.odds}>
           {split&&odds
@@ -154,7 +192,12 @@ export default function HomePanel({config,data,round,now,onNavigate,base}:{
     </section>
 
     {entry?.calculated&&<section className={styles.recap}>
-      <div className={styles.recapHead}><span className={styles.eyebrow}>Giornata {entry.round} · risultati</span></div>
+      <div className={styles.recapHead}><span className={styles.eyebrow}>Giornata {entry.round} · risultati</span>
+        {highlights.best&&<p className={styles.highlights}>
+          <span className={styles.highBest}><Flame size={13}/>{highlights.best.team} <strong>{fp(highlights.best.fantasy)}</strong></span>
+          {highlights.worst&&highlights.worst.team!==highlights.best.team&&<span className={styles.highWorst}><Snowflake size={13}/>{highlights.worst.team} <strong>{fp(highlights.worst.fantasy)}</strong></span>}
+        </p>}
+      </div>
       {entry.matches.map((m,i)=><div className={`${styles.recapMatch} ${m.home===team||m.away===team?styles.recapMine:''}`} key={`${m.home}-${m.away}-${i}`}>
         <span className={styles.recapTeam}>{m.home}</span>
         <span className={styles.recapResult}>{m.homeGoals??'–'}<i>–</i>{m.awayGoals??'–'}</span>
@@ -162,6 +205,22 @@ export default function HomePanel({config,data,round,now,onNavigate,base}:{
         <small className={styles.recapFp}>{fp(m.homeFantasy)} · {fp(m.awayFantasy)}</small>
       </div>)}
       <button className={styles.link} onClick={()=>onNavigate('competition')}>Classifica e coppe<ChevronRight size={14}/></button>
+    </section>}
+
+    {bench&&bench.rounds>0&&<section className={styles.bench}>
+      <div className={styles.recapHead}><span className={styles.eyebrow}>Quanto hai lasciato in panchina</span></div>
+      <div className={styles.benchFigures}>
+        <span><strong>{fp(bench.benchPoints)}</strong>punti in panchina</span>
+        <span><strong>{fp(bench.fieldedPoints)}</strong>punti schierati</span>
+        <span><strong>{bench.rounds}</strong>giornate lette</span>
+      </div>
+      {bench.regrets.length
+        ?<div className={styles.regrets}>{bench.regrets.slice(0,2).map(r=>
+          <span key={`${r.round}-${r.name}`} className={styles.regret}><UserRound size={13}/>
+            <strong>{r.name}</strong><small>{r.round}ª · {fp(r.points)} FP in panchina, +{fp(r.gap)} sul peggiore in campo</small>
+          </span>)}</div>
+        :<p className={styles.benchNote}>Nessuna panchina ha reso più di chi è sceso in campo.</p>}
+      <button className={styles.link} onClick={()=>window.location.assign(`${base}/lineup-analytics`)}>Scelte e continuità<ChevronRight size={14}/></button>
     </section>}
 
     {team&&<section className={styles.status}>
@@ -177,6 +236,10 @@ export default function HomePanel({config,data,round,now,onNavigate,base}:{
           <TrendingUp size={16}/><strong className={styles.statusValue}>{fp(myPerf?.fantasyAverage??null)}</strong><span>FP medi</span>
         </button></>
         :<p className={styles.statusNote}>Classifica, forma e media fantapunti compariranno qui dopo il primo calcolo ufficiale della lega.</p>}
+      {character&&<button className={styles.character} onClick={()=>window.location.assign(`${base}/stats`)}>
+        <span className={styles.characterLabel}>{character.label}</span>
+        <span>{character.fantasyRank}ª per fantapunti, {character.pointsRank}ª in classifica</span>
+      </button>}
       {tokens&&<button className={styles.statusTile} onClick={()=>onNavigate('penalties')}>
         <Coins size={16}/><strong className={styles.statusValue}>{tokens.remaining}</strong>
         <span>{tokens.penalty?`gettone · ${euro(tokens.penalty)} dovuti`:`gettone · ${periodForRound(cfg,round).label.toLowerCase()}`}</span>
