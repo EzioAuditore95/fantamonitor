@@ -194,7 +194,8 @@ Altre regole ferme:
 - CSS: `app/globals.css` (token) + `app/glass.css` + `app/glass-refinement.css` per il
   tema glass globale; le route secondarie usano CSS Modules (`*.module.css`).
 - Commit: soggetto imperativo in inglese, maiuscola iniziale, ~50 caratteri, senza
-  prefisso di scope e senza body. Es. `Archive competition snapshots during automatic syncs`.
+  prefisso di scope. Es. `Archive competition snapshots during automatic syncs`. Il corpo
+  spiega **perché**, non cosa: il diff dice già cosa. Nessun corpo quando non c'è un perché.
 
 ## Duplicazioni da tenere allineate
 
@@ -231,10 +232,14 @@ superato — la storia git li conserva, il repo no.
   minuto non deve riportarlo altrove mentre sta guardando. Senza dati di campionato si ripiega
   sull'ultima giornata presente in archivio. È una regola diversa da `fm_current_round_for_bot`,
   che serve al bot e ha la sua finestra di 24h: non unificarle senza un motivo.
-- `TabQueryBridge` ripristina la tab facendo **DOM scraping** sulle label italiane dei
-  bottoni `.main-tabs`, ed è attivo solo su `/l/{slug}`. Da qui due vincoli: **mai mettere il
-  nome della lega dentro una label di tab**, e non convertire gli `<a>` in `<Link>` — l'effect
-  è agganciato a `[pathname]` e i reload completi tra route sono strutturali e voluti.
+- `TabQueryBridge` ripristina la tab cercando `.main-tabs button[data-tab="<chiave>"]`, ed è
+  attivo solo su `/l/{slug}`. **Un `TabsTrigger` senza `data-tab` diventa irraggiungibile
+  dalla bottom nav**, in silenzio. Cercava il bottone per testo fino al 21/09: non si può più,
+  perché ogni tab porta nel DOM sia la label lunga sia quella corta e il `textContent` è la
+  loro concatenazione. La chiave va **validata contro un elenco** prima di finire nel
+  selettore, altrimenti `?tab=` è un'iniezione di selettore. Resta il vincolo di non
+  convertire gli `<a>` in `<Link>`: l'effect è agganciato a `[pathname]` e i reload completi
+  tra route sono strutturali e voluti.
 - I Server Component non possono scrivere cookie: `lib/supabase/server.ts` ignora
   l'errore di scrittura e lascia il refresh al proxy. Non "sistemare" quel `catch` vuoto.
 - Senza variabili Supabase l'app **non** va in errore: `supabaseConfigured()` mostra lo

@@ -1,0 +1,465 @@
+/* The Home tab keeps its own surface instead of reusing .panel. The glass layers give
+   .panel background, border and shadow with !important, and repaint every .panel strong,
+   h1, h2 and h3 to --fm-text the same way — which would silently erase the semantic
+   colours this tab is built on. Tokens only, never a --card fallback: the shadcn tokens
+   are still the light theme and would paint white on white. */
+
+.home {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.home section {
+  border: 1px solid var(--fm-line);
+  border-radius: var(--fm-radius);
+  background: linear-gradient(160deg, var(--fm-glass-strong), var(--fm-glass-soft));
+  box-shadow: var(--fm-shadow);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  padding: 16px;
+}
+
+.eyebrow {
+  color: var(--fm-muted);
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.footnote {
+  color: var(--fm-muted);
+  font-size: .72rem;
+  text-align: center;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 12px;
+  color: var(--fm-blue);
+  font-size: .8rem;
+  font-weight: 700;
+}
+
+.empty {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 18px 4px;
+  color: var(--fm-muted);
+  text-align: center;
+}
+
+.empty strong { color: var(--fm-text); font-size: .95rem; }
+.empty p { font-size: .8rem; max-width: 34ch; }
+.empty svg { color: var(--fm-muted); }
+
+/* --- the picker, shown until the viewer says which team is theirs ---------------- */
+
+.picker h1 {
+  margin: 4px 0 2px;
+  color: var(--fm-text);
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.picker p {
+  color: var(--fm-muted);
+  font-size: .8rem;
+}
+
+.pickerGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.pickerTeam {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 8px;
+  border: 1px solid var(--fm-line);
+  border-radius: 16px;
+  background: var(--fm-glass-soft);
+  color: var(--fm-text);
+  font-size: .78rem;
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: left;
+}
+
+.pickerTeam span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pickerTeam:hover { border-color: var(--fm-line-strong); background: var(--fm-glass); }
+
+.change {
+  color: var(--fm-muted);
+  font-size: .72rem;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* --- the fixture ----------------------------------------------------------------- */
+
+.heroTop {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.heroTop .eyebrow { min-width: 0; }
+.change { flex: none; white-space: nowrap; }
+
+.duel {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 12px;
+}
+
+.duelSide {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* The two names are the widest thing here: they truncate rather than push the score
+   off centre. "FC Villaggio Mau Mau" against "Atletico Fontanelle" is the worst case. */
+.duelName {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--fm-text);
+  font-size: .78rem;
+  font-weight: 750;
+  line-height: 1.15;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.duelVs {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 0 4px;
+}
+
+.duelVs strong {
+  color: var(--fm-text);
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: .02em;
+}
+
+.duelVs small {
+  color: var(--fm-muted);
+  font-size: .66rem;
+  white-space: nowrap;
+}
+
+.outcomeW { color: var(--fm-green); }
+.outcomeL { color: var(--fm-red); }
+.outcomeD { color: var(--fm-orange); }
+
+.lineupState {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.lineupStateSolo { grid-template-columns: 1fr; }
+
+/* Colour is never the only signal: every state carries an icon and a word. */
+.state {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--fm-line);
+  border-radius: 14px;
+  font-size: .72rem;
+}
+
+.state strong { font-weight: 750; }
+.stateWho { color: var(--fm-muted); }
+
+.stateOk { background: rgba(72,213,151,.14); }
+.stateOk strong, .stateOk svg { color: var(--fm-green); }
+.stateWait { background: rgba(255,177,93,.14); }
+.stateWait strong, .stateWait svg { color: var(--fm-orange); }
+.stateUnknown { background: var(--fm-glass-soft); }
+.stateUnknown strong, .stateUnknown svg { color: var(--fm-muted); }
+
+.stateTime {
+  margin-top: 8px;
+  color: var(--fm-muted);
+  font-size: .72rem;
+}
+
+.kickoff {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  color: var(--fm-muted);
+  font-size: .78rem;
+}
+
+.kickoff strong { color: var(--fm-text); font-weight: 750; }
+.kickoff svg { flex: none; }
+
+/* --- the estimate ---------------------------------------------------------------- */
+
+.odds {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--fm-line);
+}
+
+.oddsBar {
+  display: flex;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--fm-glass-soft);
+}
+
+.oddsBar span { height: 100%; }
+.oddsBar .oddsWin { background: var(--fm-green); }
+.oddsBar .oddsDraw { background: var(--fm-muted); }
+.oddsBar .oddsLoss { background: var(--fm-red); }
+
+.oddsFigures {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.oddsFigures span {
+  display: grid;
+  gap: 1px;
+  color: var(--fm-muted);
+  font-size: .68rem;
+  text-align: center;
+}
+
+.oddsFigures strong { font-size: 1rem; font-weight: 800; }
+.oddsFigures .oddsWin strong { color: var(--fm-green); }
+.oddsFigures .oddsDraw strong { color: var(--fm-text); }
+.oddsFigures .oddsLoss strong { color: var(--fm-red); }
+
+.oddsNote {
+  margin-top: 8px;
+  color: var(--fm-muted);
+  font-size: .7rem;
+  line-height: 1.35;
+}
+
+/* --- how many lineups are still missing ------------------------------------------ */
+
+.urgencyHead {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.urgencyHead > span {
+  color: var(--fm-muted);
+  font-size: .82rem;
+  font-weight: 700;
+}
+
+.urgencyCount {
+  color: var(--fm-text);
+  font-size: 1.9rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.urgencyCount span {
+  color: var(--fm-muted);
+  font-size: .95rem;
+  font-weight: 700;
+}
+
+.urgencyCalm { border-color: var(--fm-line); }
+.urgencyWarn { border-color: rgba(255,177,93,.45); }
+.urgencyWarn .urgencyCount { color: var(--fm-orange); }
+.urgencyLate { border-color: rgba(255,116,135,.5); }
+.urgencyLate .urgencyCount { color: var(--fm-red); }
+
+.urgencyList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.urgencyChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 5px 10px 5px 5px;
+  overflow: hidden;
+  border: 1px solid var(--fm-line);
+  border-radius: 999px;
+  background: var(--fm-glass-soft);
+  color: var(--fm-text-soft);
+  font-size: .74rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The opponent is the one name in this list that the viewer can do something about. */
+.urgencyOpponent {
+  border-color: rgba(255,177,93,.55);
+  background: rgba(255,177,93,.14);
+  color: var(--fm-orange);
+}
+
+.urgencyChip :global(.crest) {
+  width: 24px;
+  height: 27px;
+  border-radius: 8px 8px 10px 10px;
+  font-size: .6rem;
+}
+
+/* --- the round's results --------------------------------------------------------- */
+
+.recapMatch {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 8px;
+  border-radius: 14px;
+  color: var(--fm-text-soft);
+  font-size: .76rem;
+}
+
+.recapMatch + .recapMatch { margin-top: 2px; }
+.recapMine { background: var(--fm-glass-soft); box-shadow: inset 0 0 0 1px var(--fm-line); }
+
+.recapTeam {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recapAway { text-align: right; }
+
+.recapResult {
+  display: inline-flex;
+  gap: 3px;
+  color: var(--fm-text);
+  font-size: .9rem;
+  font-weight: 800;
+}
+
+.recapResult i { color: var(--fm-muted); font-style: normal; }
+
+.recapFp {
+  grid-column: 1 / -1;
+  color: var(--fm-muted);
+  font-size: .66rem;
+  text-align: center;
+}
+
+.recapHead { margin-bottom: 10px; }
+
+/* --- position, form, tokens ------------------------------------------------------ */
+
+.status {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.statusTile {
+  display: grid;
+  justify-items: start;
+  gap: 3px;
+  padding: 11px 12px;
+  border: 1px solid var(--fm-line);
+  border-radius: 16px;
+  background: var(--fm-glass-soft);
+  color: var(--fm-muted);
+  font-size: .7rem;
+  text-align: left;
+}
+
+.statusTile svg { color: var(--fm-muted); }
+.statusTile:hover { border-color: var(--fm-line-strong); }
+
+.statusValue {
+  color: var(--fm-text);
+  font-size: 1.2rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.statusNote {
+  grid-column: 1 / -1;
+  color: var(--fm-muted);
+  font-size: .76rem;
+  line-height: 1.35;
+}
+
+.statusForm { display: inline-flex; gap: 3px; }
+
+.statusForm i {
+  display: inline-grid;
+  place-items: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 6px;
+  font-size: .62rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.formW { background: rgba(72,213,151,.18); color: var(--fm-green); }
+.formD { background: rgba(255,177,93,.18); color: var(--fm-orange); }
+.formL { background: rgba(255,116,135,.18); color: var(--fm-red); }
+
+/* The two breakpoints the theme actually uses, 700 and 1000. */
+@media (min-width: 700px) {
+  .home { gap: 16px; }
+  .home section { padding: 20px; }
+  .pickerGrid { grid-template-columns: repeat(3, 1fr); }
+  .status { grid-template-columns: repeat(4, 1fr); }
+  .duelVs strong { font-size: 1.8rem; }
+  .duelName { font-size: .88rem; }
+  .recapFp { grid-column: auto; text-align: right; }
+  .recapMatch { grid-template-columns: 1fr auto 1fr auto; }
+}
+
+/* Wide enough for two columns: the fixture on the left, the estimate beside it. The left
+   side is one element, so the grid stays two children however many lines it grows. */
+@media (min-width: 1000px) {
+  .hero { display: grid; grid-template-columns: 1.4fr 1fr; column-gap: 24px; align-items: start; }
+  .heroTop { grid-column: 1 / -1; }
+  .odds { margin-top: 0; padding-top: 0; border-top: 0; border-left: 1px solid var(--fm-line); padding-left: 24px; }
+  .duel { margin-top: 10px; }
+}

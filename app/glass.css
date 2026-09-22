@@ -235,12 +235,13 @@ textarea {
 .main-tabs [data-slot=tabs-trigger] {
   min-width: 0;
   min-height: 54px;
-  padding: 6px 2px;
+  padding: 6px 1px;
   flex-direction: column;
   gap: 3px;
   color: var(--fm-muted);
   border-radius: 16px;
-  font-size: .61rem;
+  /* Six columns of ~54px at 375px: .61rem no longer fits the longest short label. */
+  font-size: .57rem;
   line-height: 1.05;
   font-weight: 700;
 }
@@ -248,6 +249,18 @@ textarea {
 .main-tabs [data-slot=tabs-trigger] svg {
   width: 20px;
   height: 20px;
+}
+
+/* Two labels per tab, one shown at a time. At 375px the bar is 341px wide and a tab gets
+   about 54px: "Competizione" does not fit there, and neither does "Gettoni e penalità".
+   The ellipsis is the parachute for whatever label comes next. */
+.main-tabs .tab-long { display: none; }
+
+.main-tabs .tab-short {
+  display: inline;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .main-tabs [data-slot=tabs-trigger][data-state=active] {
@@ -753,6 +766,9 @@ h2,
 }
 
 @media (min-width: 1000px) {
+  .main-tabs .tab-long { display: inline; }
+  .main-tabs .tab-short { display: none; }
+
   .app-shell {
     padding: 0 40px 44px;
   }

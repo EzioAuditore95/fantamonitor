@@ -1,4 +1,9 @@
-
+// The draw band, in fantasy points. Under four points of margin the league almost always
+// ends in a draw: it is the threshold expectedPoints uses to say how many points a team
+// deserved, and the one lib/win-probability.ts uses to estimate a fixture still to play.
+// It must stay a single number — two copies would drift, and the estimate shown on the
+// Home tab would contradict the expected points shown on /stats.
+export const DRAW_BAND_FP=4;
 export type MatchResult = {
   round: number;
   home: string;
@@ -94,7 +99,7 @@ export function computePerformance(teams:string[],payload:PerformancePayload):Te
     const expectedPoints=results.reduce((sum,r)=>{
       if(r.fantasy==null||r.oppFantasy==null)return sum+r.pts;
       const d=r.fantasy-r.oppFantasy;
-      return sum+(d>=4?3:d<=-4?0:1);
+      return sum+(d>=DRAW_BAND_FP?3:d<=-DRAW_BAND_FP?0:1);
     },0);
     return {
       name,played:results.length,wins,draws,losses,points:wins*3+draws,
