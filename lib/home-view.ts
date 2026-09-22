@@ -1,4 +1,5 @@
 import type { Competition,Snapshot } from './model.ts';
+import { classifyTeam,type TeamPerformance } from './performance.ts';
 
 export type CompetitionRound=Competition['calendar'][number];
 export type Standing=Competition['standings'][number];
@@ -68,3 +69,59 @@ export function standingFor(competition:Competition|null,team:string|null):{posi
 }
 
 export const hasResults=(competition:Competition|null)=>!!competition?.standings.some(row=>row.played>0);
+
+export type HeadToHead={played:number;wins:number;draws:number;losses:number;
+  last:{round:number;goals:number;opponentGoals:number;fantasy:number|null;opponentFantasy:number|null}|null};
+
+// Every meeting between two teams this season, from the point of view of the first. Reads
+// `matches`, which holds the results already calculated — the calendar's future rounds carry
+// no goals and would count as draws if they slipped in.
+export function headToHead(competition:Competition|null,team:string|null,opponent:string|null):HeadToHead|null{
+  if(!competition||!team||!opponent||team===opponent)return null;
+  const met=competition.matches
+    .filter(m=>(m.home===team&&m.away===opponent)||(m.home===opponent&&m.away===team))
+    .sort((a,b)=>a.round-b.round)
+    .map(m=>{const home=m.home===team;return {round:m.round,
+      goals:home?m.homeGoals:m.awayGoals,opponentGoals:home?m.awayGoals:m.homeGoals,
+      fantasy:home?m.homeFantasy:m.awayFantasy,opponentFantasy:home?m.awayFantasy:m.homeFantasy};});
+  if(!met.length)return null;
+  return {
+    played:met.length,
+    wins:met.filter(m=>m.goals>m.opponentGoals).length,
+    draws:met.filter(m=>m.goals===m.opponentGoals).length,
+    losses:met.filter(m=>m.goals<m.opponentGoals).length,
+    last:met[met.length-1],
+  };
+}
+
+export type RoundHighlight={team:string;fantasy:number};
+
+// Best and worst fantasy score of one round. Null when the round has not been calculated, or
+// when the payload carries no fantasy figures: a round of nulls has no best.
+export function roundHighlights(competition:Competition|null,round:number):{best:RoundHighlight|null;worst:RoundHighlight|null}{
+  const entry=roundFor(competition,round);
+  if(!entry?.calculated)return {best:null,worst:null};
+  const scores=entry.matches.flatMap(m=>[
+    ...(m.homeFantasy==null?[]:[{team:m.home,fantasy:m.homeFantasy}]),
+    ...(m.awayFantasy==null?[]:[{team:m.away,fantasy:m.awayFantasy}]),
+  ]);
+  if(!scores.length)return {best:null,worst:null};
+  return {
+    best:scores.reduce((top,s)=>s.fantasy>top.fantasy?s:top),
+    worst:scores.reduce((low,s)=>s.fantasy<low.fantasy?s:low),
+  };
+}
+
+export type Character={label:string;fantasyRank:number;pointsRank:number;gap:number};
+
+// What the league already says about a team, in one line: the label /stats computes, plus the
+// distance between what it produces and what it collects. `gap` is positive when the table is
+// kinder than the fantasy points — the number that makes "cinica" or "sfortunata" mean something.
+export function characterOf(performance:readonly TeamPerformance[],team:string|null):Character|null{
+  const played=performance.filter(t=>t.played>0);
+  const me=played.find(t=>t.name===team);
+  if(!me||played.length<2)return null;
+  const rank=(key:'fantasyAverage'|'points')=>[...played].sort((a,b)=>b[key]-a[key]).findIndex(t=>t.name===team)+1;
+  const fantasyRank=rank('fantasyAverage'),pointsRank=rank('points');
+  return {label:classifyTeam(me,played),fantasyRank,pointsRank,gap:fantasyRank-pointsRank};
+}
