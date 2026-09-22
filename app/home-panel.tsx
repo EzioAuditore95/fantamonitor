@@ -1,8 +1,9 @@
 'use client';
 import { useEffect,useMemo,useState } from 'react';
-import { CheckCircle2,ChevronRight,Clock3,Coins,Flame,Info,Snowflake,Swords,TrendingUp,Trophy,TriangleAlert } from 'lucide-react';
+import { CheckCircle2,ChevronRight,Clock3,Coins,Flame,Info,Snowflake,Star,Swords,TrendingUp,Trophy,TriangleAlert,UserRound } from 'lucide-react';
 import Crest from './crest';
 import { useRoundSchedule } from './round-schedule-provider';
+import { usePlayerGrades } from './use-player-grades';
 import { displayDate,type Archive } from '@/lib/model';
 import { periodForRound,teamNames,type LeagueConfig } from '@/lib/league';
 import { euro,teamBalance } from '@/lib/penalties';
@@ -11,6 +12,8 @@ import { formatKickoff,formatRemainingCoarse,kickoffFor } from '@/lib/round-sche
 import { readStoredTeam,storedTeamKey } from '@/lib/stored-team';
 import { characterOf,competitionFrom,fixtureFor,hasResults,headToHead,lineupStateFor,missingLineups,outcomeOf,roundFor,roundHighlights,standingFor } from '@/lib/home-view';
 import { MIN_ROUNDS_FOR_PROBABILITY,roundedSplit,winProbability } from '@/lib/win-probability';
+import { gradesByRound,rosterOf,topFantasyAverages,type TopPlayer } from '@/lib/home-players';
+import { seasonPerformance } from '@/lib/lineup-performance';
 import styles from './home-panel.module.css';
 
 const HOUR=3_600_000;
@@ -21,6 +24,17 @@ function LineupBadge({present,label}:{present:boolean|undefined;label:string}){
   const Icon=present===undefined?Info:present?CheckCircle2:Clock3;
   return <span className={`${styles.state} ${tone}`}><Icon size={15}/><span className={styles.stateWho}>{label}</span>
     <strong>{present===undefined?'nessuna lettura':present?'inserita':'non inserita'}</strong></span>;
+}
+
+function TopThree({title,players,loading}:{title:string;players:TopPlayer[];loading:boolean}){
+  return <div className={styles.topSide}>
+    <span className={styles.topTitle}>{title}</span>
+    {players.length
+      ?players.map(p=><span key={p.id} className={styles.topRow}>
+        <small>{p.role??'—'}</small><span className={styles.topName}>{p.name}</span><strong>{p.fantasyGrade.toFixed(2)}</strong>
+      </span>)
+      :<span className={styles.topEmpty}>{loading?'…':'dati non disponibili'}</span>}
+  </div>;
 }
 
 export default function HomePanel({config,data,round,now,onNavigate,base}:{
@@ -51,7 +65,7 @@ export default function HomePanel({config,data,round,now,onNavigate,base}:{
   const performance=useMemo(()=>competition?computePerformance(TEAM_NAMES,competition):[],[TEAM_NAMES,competition]);
   const perfOf=(name:string|null)=>performance.find((t:TeamPerformance)=>t.name===name)??null;
 
-  const fixture=fixtureFor(competition,round,team??null);
+  const fixture=useMemo(()=>fixtureFor(competition,round,team??null),[competition,round,team]);
   const entry=roundFor(competition,round);
   const outcome=outcomeOf(fixture);
   const kickoff=kickoffFor(schedule,round)?.start_at??null;
@@ -68,6 +82,16 @@ export default function HomePanel({config,data,round,now,onNavigate,base}:{
   const h2h=headToHead(competition,team??null,fixture?.opponent??null);
   const highlights=roundHighlights(competition,round);
   const character=characterOf(performance,team??null);
+
+  // Deferred, fetched once: see use-player-grades. Everything below renders without it.
+  const {grades,loading:gradesLoading}=usePlayerGrades(cfg.slug);
+  const opponent=fixture?.opponent??null;
+  const myTop=useMemo(()=>topFantasyAverages(rosterOf(snapshots,team??null),grades),[snapshots,team,grades]);
+  const oppTop=useMemo(()=>topFantasyAverages(rosterOf(snapshots,opponent),grades),[snapshots,opponent,grades]);
+  const bench=useMemo(()=>{
+    if(!grades||!team||!data)return null;
+    return seasonPerformance(cfg,[team],data,gradesByRound(grades),competition).season[0]??null;
+  },[cfg,team,data,grades,competition]);
   const tokens=team?teamBalance(cfg,team,periodForRound(cfg,round).key,data?.reviews??[]):null;
 
   const urgency=!current?styles.urgencyCalm
@@ -123,6 +147,13 @@ export default function HomePanel({config,data,round,now,onNavigate,base}:{
         {kickoff&&<p className={styles.kickoff}><Clock3 size={15}/>{!outcome&&toKickoff!=null&&toKickoff>0
           ?<>Inizio tra <strong>{formatRemainingCoarse(toKickoff)}</strong> · {formatKickoff(kickoff)}</>
           :<>{outcome?'Giornata conclusa':'Formazioni chiuse · risultati in arrivo'} · {formatKickoff(kickoff)}</>}</p>}
+        {fixture&&(myTop.length||oppTop.length||gradesLoading)&&<div className={styles.top}>
+          <span className={styles.topKicker}><Star size={12}/>Migliori per fantamedia</span>
+          <div className={styles.topGrid}>
+            <TopThree title={fixture.team} players={myTop} loading={gradesLoading}/>
+            <TopThree title={fixture.opponent} players={oppTop} loading={gradesLoading}/>
+          </div>
+        </div>}
         </div>
         {fixture&&!outcome&&<div className={styles.odds}>
           {split&&odds
@@ -174,6 +205,22 @@ export default function HomePanel({config,data,round,now,onNavigate,base}:{
         <small className={styles.recapFp}>{fp(m.homeFantasy)} · {fp(m.awayFantasy)}</small>
       </div>)}
       <button className={styles.link} onClick={()=>onNavigate('competition')}>Classifica e coppe<ChevronRight size={14}/></button>
+    </section>}
+
+    {bench&&bench.rounds>0&&<section className={styles.bench}>
+      <div className={styles.recapHead}><span className={styles.eyebrow}>Quanto hai lasciato in panchina</span></div>
+      <div className={styles.benchFigures}>
+        <span><strong>{fp(bench.benchPoints)}</strong>punti in panchina</span>
+        <span><strong>{fp(bench.fieldedPoints)}</strong>punti schierati</span>
+        <span><strong>{bench.rounds}</strong>giornate lette</span>
+      </div>
+      {bench.regrets.length
+        ?<div className={styles.regrets}>{bench.regrets.slice(0,2).map(r=>
+          <span key={`${r.round}-${r.name}`} className={styles.regret}><UserRound size={13}/>
+            <strong>{r.name}</strong><small>{r.round}ª · {fp(r.points)} FP in panchina, +{fp(r.gap)} sul peggiore in campo</small>
+          </span>)}</div>
+        :<p className={styles.benchNote}>Nessuna panchina ha reso più di chi è sceso in campo.</p>}
+      <button className={styles.link} onClick={()=>window.location.assign(`${base}/lineup-analytics`)}>Scelte e continuità<ChevronRight size={14}/></button>
     </section>}
 
     {team&&<section className={styles.status}>
