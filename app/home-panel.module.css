@@ -119,6 +119,9 @@
   gap: 10px;
 }
 
+.heroTop .eyebrow { min-width: 0; }
+.change { flex: none; white-space: nowrap; }
+
 .duel {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -176,7 +179,10 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+  margin-top: 12px;
 }
+
+.lineupStateSolo { grid-template-columns: 1fr; }
 
 /* Colour is never the only signal: every state carries an icon and a word. */
 .state {
@@ -449,9 +455,11 @@
   .recapMatch { grid-template-columns: 1fr auto 1fr auto; }
 }
 
+/* Wide enough for two columns: the fixture on the left, the estimate beside it. The left
+   side is one element, so the grid stays two children however many lines it grows. */
 @media (min-width: 1000px) {
-  .hero { display: grid; grid-template-columns: 1.35fr 1fr; gap: 22px; align-items: start; }
+  .hero { display: grid; grid-template-columns: 1.4fr 1fr; column-gap: 24px; align-items: start; }
   .heroTop { grid-column: 1 / -1; }
-  .odds { margin-top: 0; padding-top: 0; border-top: 0; border-left: 1px solid var(--fm-line); padding-left: 22px; }
+  .odds { margin-top: 0; padding-top: 0; border-top: 0; border-left: 1px solid var(--fm-line); padding-left: 24px; }
   .duel { margin-top: 10px; }
 }

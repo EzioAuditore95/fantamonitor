@@ -235,7 +235,7 @@ textarea {
 .main-tabs [data-slot=tabs-trigger] {
   min-width: 0;
   min-height: 54px;
-  padding: 6px 2px;
+  padding: 6px 1px;
   flex-direction: column;
   gap: 3px;
   color: var(--fm-muted);

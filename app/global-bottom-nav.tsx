@@ -8,7 +8,7 @@ import styles from './global-bottom-nav.module.css';
 // bar is the only navigation on /stats, /players and /lineup-analytics.
 const items=[
   {label:'Home',short:'Home',suffix:'?tab=home',icon:Home,key:'home'},
-  {label:'Formazioni',short:'Formazioni',suffix:'?tab=monitor',icon:Activity,key:'monitor'},
+  {label:'Formazioni',short:'Monitor',suffix:'?tab=monitor',icon:Activity,key:'monitor'},
   {label:'Gettoni e penalità',short:'Gettoni',suffix:'?tab=penalties',icon:Coins,key:'penalties'},
   {label:'Storico',short:'Storico',suffix:'?tab=history',icon:History,key:'history'},
   {label:'Competizione',short:'Trofei',suffix:'?tab=competition',icon:Trophy,key:'competition'},

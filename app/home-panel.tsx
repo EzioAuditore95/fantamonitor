@@ -87,10 +87,11 @@ export default function HomePanel({config,data,round,now,onNavigate,base}:{
       :<section className={styles.hero}>
         <div className={styles.heroTop}>
           <span className={styles.eyebrow}>La tua giornata {round}{entry?` · Serie A ${entry.championshipRound}`:''}</span>
-          <button className={styles.change} onClick={()=>choose(null)}>Cambia squadra</button>
+          <button className={styles.change} onClick={()=>choose(null)}>Cambia</button>
         </div>
+        <div className={styles.heroMain}>
         {fixture
-          ?<><div className={styles.duel}>
+          ?<div className={styles.duel}>
             <div className={styles.duelSide}><Crest cfg={cfg} name={fixture.team} url={current?.teams.find(t=>t.name===fixture.team)?.crest_url}/><span className={styles.duelName}>{fixture.team}</span></div>
             <div className={styles.duelVs}>
               {outcome?<><strong className={styles[`outcome${outcome}`]}>{fixture.goals}–{fixture.opponentGoals}</strong><small>{fp(fixture.fantasy)} · {fp(fixture.opponentFantasy)} FP</small></>
@@ -98,21 +99,24 @@ export default function HomePanel({config,data,round,now,onNavigate,base}:{
             </div>
             <div className={`${styles.duelSide} ${styles.duelAway}`}><Crest cfg={cfg} name={fixture.opponent} url={current?.teams.find(t=>t.name===fixture.opponent)?.crest_url}/><span className={styles.duelName}>{fixture.opponent}</span></div>
           </div>
-          <div className={styles.lineupState}>
-            <LineupBadge present={mine} label="La tua"/>
-            <LineupBadge present={theirs} label="La sua"/>
-          </div>
-          {current&&<p className={styles.stateTime}>Ultima osservazione {displayDate(current.observed_at)}{stale?' · da aggiornare':''}</p>}
-          </>
           :<div className={styles.empty}>
             <Trophy size={22}/>
             <strong>Calendario non ancora in archivio</strong>
             <p>La giornata {round} comparirà qui appena una sincronizzazione porta il calendario ufficiale.</p>
             <button className={styles.link} onClick={()=>onNavigate('competition')}>Vai alle competizioni<ChevronRight size={14}/></button>
           </div>}
-        {kickoff&&<p className={styles.kickoff}><Clock3 size={15}/>{toKickoff!=null&&toKickoff>0
+        {/* Without a fixture there is still the one state that is always worth knowing. */}
+        <div className={`${styles.lineupState} ${fixture?'':styles.lineupStateSolo}`}>
+          <LineupBadge present={mine} label="La tua"/>
+          {fixture&&<LineupBadge present={theirs} label="La sua"/>}
+        </div>
+        {current&&<p className={styles.stateTime}>Ultima osservazione {displayDate(current.observed_at)}{stale?' · da aggiornare':''}</p>}
+        {/* A result outranks the clock: a calculated round never shows a countdown, whatever
+            the calendar row says about its kickoff. */}
+        {kickoff&&<p className={styles.kickoff}><Clock3 size={15}/>{!outcome&&toKickoff!=null&&toKickoff>0
           ?<>Inizio tra <strong>{formatRemainingCoarse(toKickoff)}</strong> · {formatKickoff(kickoff)}</>
           :<>{outcome?'Giornata conclusa':'Formazioni chiuse · risultati in arrivo'} · {formatKickoff(kickoff)}</>}</p>}
+        </div>
         {fixture&&!outcome&&<div className={styles.odds}>
           {split&&odds
             ?<><div className={styles.oddsBar} role="img" aria-label={`Stima: ${split.win}% vittoria, ${split.draw}% pareggio, ${split.loss}% sconfitta`}>
