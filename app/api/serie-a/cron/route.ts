@@ -1,5 +1,6 @@
 import { currentSourceSeason } from '@/lib/serie-a';
 import { syncSerieA } from '@/lib/serie-a-store';
+import { isPreview } from '@/lib/environment';
 const headers={'Cache-Control':'private, no-store'};
 
 // The scheduled half of the Serie A import. Vercel sends `Authorization: Bearer ${CRON_SECRET}`
@@ -7,6 +8,7 @@ const headers={'Cache-Control':'private, no-store'};
 // so there is no second definition of who may write and no constant-time comparison to get wrong.
 // The season comes from the calendar because this caller has no session and therefore no league.
 export async function GET(request:Request){
+  if(isPreview())return Response.json({error:'Aggiornamento automatico disabilitato nelle anteprime.'},{status:403,headers});
   const key=request.headers.get('authorization')?.replace(/^Bearer\s+/i,'').trim()??'';
   if(!key)return Response.json({error:'Chiave richiesta.'},{status:401,headers});
   try{

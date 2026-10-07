@@ -1,8 +1,17 @@
 # FANTAMONITOR — deploy Next.js / Supabase
 
-Dashboard della lega con gettoni, penalità e layout mobile.
+Dashboard privata delle leghe con monitor formazioni, gettoni, penalità e layout mobile.
+
+Next.js 16 / React 19 / TypeScript; Supabase gestisce Auth, PostgreSQL e isolamento RLS.
+La Home mostra la propria partita, le consegne, il countdown, gli scontri diretti e il
+rendimento dei calciatori. Le viste dedicate offrono competizione, statistiche, voti e
+analisi delle formazioni e della panchina. Le probabilità sono stime sui risultati archiviati.
+
+La sessione identifica l'utente; il ruolo viene risolto **nella lega richiesta**, anche
+quando un utente è amministratore in una lega e partecipante in un'altra.
 
 Istruzioni operative: [deploy/README.md](deploy/README.md).
+Stato del consolidamento: [deploy/CONSOLIDATION.md](deploy/CONSOLIDATION.md).
 
 La migrazione dal runtime Sites a Vercel e Supabase è completata: la persistenza è
 Supabase e la build è quella di Next.
@@ -13,6 +22,11 @@ con una sessione autenticata e acquisisce la giornata ai checkpoint `T-24h`, `T-
 `fm_round_schedule`. Ogni esecuzione è registrata in `fm_auto_sync_runs`, che impedisce
 esecuzioni doppie sullo stesso checkpoint, e pubblica lo stato delle formazioni su
 Telegram. La lettura manuale dalla dashboard resta disponibile all'amministratore.
+
+La pianificazione vive in Supabase (`pg_cron` → Vault/`pg_net` → scheduler Railway →
+connettore). Lo scheduler resta sempre attivo; GitHub Actions offre soltanto l'avvio manuale.
+Le preview richiedono un database di test distinto, disabilitano connettore e cron e
+mostrano configurazione incompleta finché il progetto di test non è collegato.
 
 ## Gettoni e penalità
 
