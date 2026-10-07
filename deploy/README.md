@@ -1,13 +1,15 @@
 # Deploy FANTAMONITOR
 
-Questo branch migra la web app a Next.js + Supabase. La versione Sites esistente
-rimane operativa fino al completamento del trasferimento e della verifica dei dati.
+La migrazione da Sites a Next.js + Supabase è completata. Il branch di produzione è
+`main`. La web app principale è https://fantamonitor.vercel.app; connettore e scheduler
+vivono su Railway. Il servizio web Railway esiste anche, ma richiede una propria
+configurazione Supabase: un deployment riuscito da solo non certifica il login.
 
 ## 1. Supabase
 
 Usare un progetto dedicato, con regione UE. Applicare una sola volta
-`supabase/migrations/202609100001_fantamonitor.sql` tramite migrazione o SQL editor.
-La migrazione crea le tabelle `fm_*` e le funzioni transazionali. Tutte le tabelle
+**tutte** le migrazioni di `supabase/migrations/`, in ordine, tramite la CLI Supabase.
+Le migrazioni creano le tabelle `fm_*` e le funzioni transazionali. Tutte le tabelle
 hanno RLS: solo i membri leggono i dati e solo gli amministratori possono usare
 le RPC di scrittura. Non configurare la service-role key nella web app.
 
@@ -16,8 +18,9 @@ disabilitare le registrazioni pubbliche se non necessarie. Recuperare il vero UU
 creato e abilitare l'utente:
 
 ```sql
-insert into public.fm_members (user_id,role)
-values ('UUID_EFFETTIVO_DA_AUTH_USERS','admin');
+insert into public.fm_memberships (league_id,user_id,role)
+select id,'UUID_EFFETTIVO_DA_AUTH_USERS'::uuid,'admin'
+from public.fm_leagues where slug='SLUG_EFFETTIVO_DELLA_LEGA';
 ```
 
 Per un partecipante usare `viewer`. L'app autentica la password tramite Supabase;
@@ -25,8 +28,8 @@ non esiste auto-promozione del primo utente né fiducia negli header di Sites.
 
 ## 2. Vercel
 
-Importare `EzioAuditore95/fantamonitor`, selezionando il branch `deploy/vercel-supabase`
-per il primo deploy. Root directory: radice. Framework: Next.js. Node: 22.
+Importare `EzioAuditore95/fantamonitor`, selezionando il branch `main`.
+Root directory: radice. Framework: Next.js. Node: 22.
 La configurazione `vercel.json` usa `npm ci` e `npm run build`.
 
 Configurare prima della build:
@@ -35,9 +38,12 @@ Configurare prima della build:
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`: chiave pubblicabile del progetto.
 
 Queste sono credenziali pubbliche di connessione; i dati sono protetti da Auth e RLS.
-Non usare chiavi service-role o secret al loro posto. Allineare i valori in tutti
-gli ambienti che devono leggere lo stesso progetto; anteprime con dati di test
-possono invece usare un progetto Supabase separato.
+Non usare chiavi service-role o secret al loro posto. Le preview devono usare un
+progetto Supabase di test, senza dati o segreti di produzione. Impostare nelle preview
+`FM_PREVIEW_SUPABASE_PROJECT_REF` e `FM_PRODUCTION_SUPABASE_PROJECT_REF`: il primo deve
+corrispondere all'URL Supabase e differire dal secondo. Senza questi controlli l'app e
+il proxy non aprono connessioni. Non configurare connettore, coppia Fantacalcio o
+`CRON_SECRET` nelle preview; connettore e cron sono bloccati anche dal codice.
 
 ### Voti Serie A: il cron e la sua chiave
 
@@ -45,14 +51,14 @@ possono invece usare un progetto Supabase separato.
 ogni invocazione pianificata con `Authorization: Bearer ${CRON_SECRET}`, e quel bearer **è** la
 chiave che il database controlla: la route non confronta niente: passa il valore a
 `fm_import_serie_a_round`, e decide `fm_serie_a_import_authorized`, di cui la migrazione
-`20260921000001_serie_a_import_key.sql` conserva **solo il digest**.
+più recente conserva **solo il digest**.
 
 Quindi su Vercel va impostata una sola variabile, `CRON_SECRET`, con la chiave in chiaro il cui
 SHA-256 è già nella migrazione. Per generarne una nuova (e ruotarla):
 
 ```sh
 KEY=$(openssl rand -base64 36 | tr -d '\n' | tr '+/' '-_')
-echo "$KEY"                                             # → CRON_SECRET su Vercel
+# Trasferire KEY direttamente al secret store, senza stamparla o salvarla nel repository.
 printf '%s' "$KEY" | openssl dgst -sha256 -hex          # → digest da mettere in migrazione
 ```
 
@@ -74,7 +80,7 @@ email/password e non richiede un callback OAuth. Cambiare le variabili NEXT_PUBL
 richiede una nuova build. Una build senza variabili mostra lo stato di configurazione
 incompleta, senza esporre la dashboard.
 
-## 3. Trasferimento storico
+## 3. Trasferimento storico (procedura della migrazione completata)
 
 Prima del passaggio definitivo esportare da Sites le osservazioni e tutte le revisioni
 `lineup_reviews` e salvare a parte il seed `INITIAL_ARCHIVE_JSON` già usato dal sito.
@@ -207,6 +213,12 @@ Variabili del servizio scheduler: `EVENT_SCHEDULER_SECRET` (lo stesso valore che
 Vault come `fm_event_scheduler_secret`), `FANTAMONITOR_CONNECTOR_SECRET` e `CONNECTOR_URL`.
 Esiste anche il workflow `auto-sync.yml`, manuale (`workflow_dispatch`).
 
+Il servizio scheduler usa `connector/railway.scheduler.json`: `sleepApplication=false`,
+healthcheck `/health`, e filtri che includono `scheduler-server.mjs`, `lib/scheduler.mjs`,
+Dockerfile e configurazione. Il pannello Railway deve puntare a questo file, con root
+`connector`. Il successo del watchdog SQL certifica la prenotazione, non la risposta
+HTTP del connettore: collaudare anche `/run` con il bearer e controllare `fm_auto_sync_runs`.
+
 Gli orari di inizio giornata vivono in `fm_round_schedule`: le righe future restano a
 `NULL` finché la Lega non pubblica gli orari ufficiali, e un checkpoint senza orario non
 viene pianificato.
@@ -248,11 +260,13 @@ base64 -i fm-credential.key | tr -d '\n'   # → FM_CREDENTIAL_PRIVATE_KEY (solo
 
 Da fare almeno a fine stagione, e subito se si sospetta una fuga:
 
-1. genera una nuova coppia con il comando sopra;
-2. aggiorna `FM_CREDENTIAL_PUBLIC_KEY` sulla web app;
-3. chiedi a ogni amministratore di ricollegare il proprio account dal dialog — il salvataggio
-   azzera `last_verified_at`, quindi le leghe non ancora ricollegate sono visibili a colpo d'occhio;
-4. aggiorna `FM_CREDENTIAL_PRIVATE_KEY` sul connettore e rimuovi la chiave vecchia.
+1. scegliere una finestra senza checkpoint e concordare il ricollegamento con gli admin;
+2. sospendere `auto_sync_enabled` sulle leghe interessate e generare la nuova coppia;
+3. aggiornare pubblica e `FM_CREDENTIAL_KEY_VERSION` sulla web app e privata solo sul
+   connettore, poi ridistribuire entrambi; azzerare le vecchie buste e la verifica;
+4. ogni amministratore ricollega l'account dal dialog e preme «Verifica connessione»;
+5. soltanto dopo login e cattura riusciti, ripristinare `auto_sync_enabled` e chiamare
+   `fm_schedule_next_event()`. Non ripristinare chiavi revocate durante un rollback.
 
 Il campo **Alzare `FM_CREDENTIAL_KEY_VERSION` sulla web app** insieme alla chiave pubblica (1 → 2 → …):
 è ciò che fa comparire nel dialog l'avviso "cifrate con una chiave precedente" per le leghe
@@ -356,9 +370,9 @@ where o.body->>'league' is distinct from l.slug;
 
 ## Segreti
 
-L'inventario dell'ambiente Vercel e il piano di bonifica sono in
-[SECRETS.md](SECRETS.md): la web app legge cinque variabili, le altre diciassette sono
-residui, e alcune vanno ruotate oltre che rimosse.
+L'inventario dei segreti e le attività ancora pendenti sono in [SECRETS.md](SECRETS.md).
+Gli esiti del collaudo sono in [CONSOLIDATION.md](CONSOLIDATION.md). Non interpretare una
+vecchia nota di bonifica come prova dello stato attuale: verificare provider e deployment.
 
 ## Verifiche
 

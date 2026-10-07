@@ -2,6 +2,7 @@ import { createHash,createHmac,timingSafeEqual } from 'node:crypto';
 import { snapshotSchemaFor,makeCompetitionSchema,normalize,type Competition } from './model';
 import type { LeagueConfig } from './league.ts';
 import { importSnapshots } from './archive';
+import { isPreview } from './environment.ts';
 
 const MAX_RESPONSE=524_288;
 function secret(){return process.env.FANTAMONITOR_CONNECTOR_SECRET??'';}
@@ -9,6 +10,7 @@ function endpoint(){return (process.env.FANTAMONITOR_CONNECTOR_URL??'').replace(
 function secretFingerprint(){return createHash('sha256').update(secret()).digest('hex').slice(0,12);}
 function signature(timestamp:string,body:string){return createHmac('sha256',secret()).update(`${timestamp}.${body}`).digest('hex');}
 async function connectorRequest(path:string,input:unknown,timeout:number){
+  if(isPreview())throw new Error('Connettore non configurato per le anteprime.');
   if(!endpoint()||!secret())throw new Error('Connettore non configurato.');
   const timestamp=String(Date.now()),body=JSON.stringify(input);
   const response=await fetch(endpoint()+path,{method:'POST',headers:{'content-type':'application/json','x-fm-timestamp':timestamp,'x-fm-signature':signature(timestamp,body)},body,cache:'no-store',signal:AbortSignal.timeout(timeout)});

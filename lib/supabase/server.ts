@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
-export function supabaseConfigured(){return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL&&process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);}
+import { supabaseEnvironmentConfigured } from '../environment.ts';
+export const supabaseConfigured=supabaseEnvironmentConfigured;
 export async function createClient(){
   const store=await cookies();
   if(!supabaseConfigured())throw new Error('Supabase configuration missing');

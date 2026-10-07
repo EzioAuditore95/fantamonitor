@@ -1,4 +1,5 @@
 import { constants,createCipheriv,createDecipheriv,privateDecrypt,publicEncrypt,randomBytes } from 'node:crypto';
+import { isPreview } from './environment.ts';
 
 // Hybrid envelope: a random AES key per message, sealed with RSA-OAEP. Playwright's
 // storageState is far past RSA's size limit, and a single format means never picking a
@@ -10,7 +11,7 @@ const unb64=(s:string)=>Buffer.from(s,'base64url');
 function pem(value:string){const text=value.includes('-----BEGIN')?value:Buffer.from(value,'base64').toString('utf8');return text.trim();}
 
 export function credentialPublicKey():string|null{const raw=process.env.FM_CREDENTIAL_PUBLIC_KEY;return raw?pem(raw):null;}
-export function credentialsConfigured(){return Boolean(credentialPublicKey());}
+export function credentialsConfigured(){return !isPreview()&&Boolean(credentialPublicKey());}
 // La versione dice con quale chiave è stato sigillato un segreto, e si alza insieme alla
 // chiave pubblica quando si ruota. Scriverla fissa nel codice rendeva il campo inutile.
 export function credentialKeyVersion():number{

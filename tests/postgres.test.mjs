@@ -220,6 +220,16 @@ test('an admin of one league cannot write into another',async()=>{
  assert.equal((await asUser(bothUser,'select count(*)::int as n from fm_observations')).rows[0].n,2);
  assert.deepEqual((await asUser(bothUser,saveReviewSql,[JSON.stringify({...review,status:'unverified',note:'Sospeso in attesa di verifica.'}),2,ALPHA])).rows[0].fm_save_review,{saved:true,duplicate:false});
 });
+test('mixed roles remain scoped when their assignment to league ids is reversed',async()=>{
+ await db.query("update fm_memberships set role=case when league_id=$1 then 'viewer' else 'admin' end where user_id=$2",[ALPHA,bothUser]);
+ try{
+  assert.deepEqual((await asUser(bothUser,'select fm_is_admin($1) as alpha,fm_is_admin($2) as beta',[ALPHA,BETA])).rows[0],{alpha:false,beta:true});
+  assert.equal((await asUser(bothUser,'select count(*)::int as n from fm_observations')).rows[0].n,2);
+  await assert.rejects(asUser(bothUser,'select fm_import_observations($1::jsonb)',[JSON.stringify([observation])]),/admin_required/);
+  assert.deepEqual((await asUser(bothUser,'select fm_import_observations($1::jsonb) as result',[JSON.stringify([betaObservation])])).rows[0].result,{imported:0,duplicates:1});
+ }finally{await db.query("update fm_memberships set role=case when league_id=$1 then 'admin' else 'viewer' end where user_id=$2",[ALPHA,bothUser]);}
+});
+
 test('two leagues can hold the same round at the same instant',async()=>{
  const stamp='2025-09-02T00:00:00.000Z';
  await asUser(alphaAdmin,'select fm_import_observations($1::jsonb)',[JSON.stringify([{id:'e'.repeat(64),body:{...observation.body,observed_at:stamp}}])]);

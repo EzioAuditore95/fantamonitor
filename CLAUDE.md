@@ -144,7 +144,8 @@ test, la modifica è sbagliata — non il test.
 
 Ogni route API ripete, in quest'ordine:
 
-1. `getAppUser()` → 401 se assente;
+1. `getAppUser()` risolve solo l'identità; `requireLeagueMember()` risolve la membership
+   della lega richiesta → 401 senza sessione, 404 senza accesso alla lega;
 2. `user.role !== 'admin'` → 403 sulle scritture;
 3. header `origin` === origin della richiesta → 403 (anti-CSRF);
 4. `content-type: application/json` → 415;
@@ -161,8 +162,8 @@ Altre regole ferme:
 - Traffico app ⇄ connettore firmato **in entrambe le direzioni** con HMAC-SHA256 su
   `${timestamp}.${body}`, confronto con `timingSafeEqual`, finestra 120 s, risposta
   limitata a 512 KB. Non sostituire con confronti `===`.
-- `/auto-sync` sul connettore accetta solo un **OIDC token GitHub Actions** verificato
-  su repo, ref e workflow. `fm_auto_sync_authorized` confronta il **digest SHA-256** della
+- `/auto-sync` accetta un **OIDC token GitHub Actions** verificato su repo, ref e workflow,
+  oppure la firma HMAC dello scheduler. `fm_auto_sync_authorized` confronta il **digest SHA-256** della
   chiave: il testo in chiaro esiste solo nelle variabili Railway.
 - Messaggi d'errore verso l'utente: in italiano, senza dettagli tecnici. La diagnostica
   va in `console.error` con codice breve (es. `archive_read_failed`) e, per il
@@ -173,6 +174,8 @@ Altre regole ferme:
   privata vive **solo** sul connettore. Vedi [deploy/README.md](deploy/README.md) per
   generazione e rotazione. Mai loggare il chiaro: solo `usernameFingerprint` a 12 hex.
 - `.env*` è ignorato (eccetto `.env.example`). Il token Telegram vive solo su Railway.
+- Le preview non chiamano il connettore né il cron. `supabaseConfigured()` e il proxy
+  richiedono un progetto di test esplicitamente distinto dal riferimento di produzione.
 
 ## Convenzioni di codice
 
