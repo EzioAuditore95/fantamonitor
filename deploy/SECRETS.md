@@ -32,17 +32,19 @@ Sono stati svuotati i valori di:
 Questo neutralizza i valori nelle nuove build, ma **non cancella le voci**
 e **non modifica i deployment già pubblicati**. L'API installata non offre
 cancellazione; dashboard o CLI autenticata devono eliminare le voci vuote.
-Occorre ridistribuire gli ambienti e ruotare le chiavi precedenti.
+La produzione è stata ridistribuita con le nuove chiavi (commit `dd6eb05`). La preview
+`8323dd6` mostra configurazione incompleta e non offre accesso al database produttivo.
+I vecchi deployment non devono essere promossi: conservano configurazioni precedenti.
 
 ## Rotazione coordinata
 
 | Credenziale | Destinazioni da aggiornare insieme | Stato |
 |---|---|---|
-| Coppia RSA Fantacalcio | pubblica/versione Vercel; privata connettore | materiale preparato; ricollegamento admin necessario |
-| HMAC | Vercel, connettore, scheduler | materiale preparato |
-| Bearer scheduler | scheduler Railway, Vault | materiale preparato |
-| Chiave auto-sync | connettore, digest PostgreSQL | migrazione preparata e verificata in PGlite |
-| Chiave voti Serie A | CRON_SECRET Vercel, digest PostgreSQL | migrazione preparata e verificata in PGlite |
+| Coppia RSA Fantacalcio | pubblica/versione Vercel; privata connettore | versione 3 distribuita; ricollegamento admin e acquisizione giornata 3 riusciti |
+| HMAC | Vercel, connettore, scheduler | ruotato; inoltro scheduler/connettore HTTP 200 |
+| Bearer scheduler | scheduler Railway, Vault | ruotato; chiamata dal Vault HTTP 200 |
+| Chiave auto-sync | connettore, digest PostgreSQL | ruotata; migrazione applicata, inoltro senza checkpoint dovuti riuscito |
+| Chiave voti Serie A | CRON_SECRET Vercel, digest PostgreSQL | ruotata e distribuita; collaudo acquisizione pendente |
 | Chiavi privilegiate Supabase e password PostgreSQL | dipendenze effettivamente ancora attive | da verificare/ruotare tramite gestione Supabase |
 
 Sequenza: scegliere una finestra senza checkpoint, sospendere l'auto-sync,

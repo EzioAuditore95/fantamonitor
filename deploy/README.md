@@ -213,10 +213,12 @@ Variabili del servizio scheduler: `EVENT_SCHEDULER_SECRET` (lo stesso valore che
 Vault come `fm_event_scheduler_secret`), `FANTAMONITOR_CONNECTOR_SECRET` e `CONNECTOR_URL`.
 Esiste anche il workflow `auto-sync.yml`, manuale (`workflow_dispatch`).
 
-Il servizio scheduler usa `connector/railway.scheduler.json`: `sleepApplication=false`,
-healthcheck `/health`, e filtri che includono `scheduler-server.mjs`, `lib/scheduler.mjs`,
-Dockerfile e configurazione. Il pannello Railway deve puntare a questo file, con root
-`connector`. Il successo del watchdog SQL certifica la prenotazione, non la risposta
+Il servizio scheduler ha `sleepApplication=false`, healthcheck `/health`, e filtri che
+includono `scheduler-server.mjs`, `lib/scheduler.mjs`, Dockerfile e configurazione.
+`connector/railway.scheduler.json` documenta questi parametri; il 7 ottobre l'API Railway
+ha rifiutato di collegare il file perché Config as Code è deprecato. I parametri sono
+stati applicati direttamente al servizio, con root `connector`. Il successo del
+watchdog SQL certifica la prenotazione, non la risposta
 HTTP del connettore: collaudare anche `/run` con il bearer e controllare `fm_auto_sync_runs`.
 
 Gli orari di inizio giornata vivono in `fm_round_schedule`: le righe future restano a
