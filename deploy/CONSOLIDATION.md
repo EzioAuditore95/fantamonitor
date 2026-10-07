@@ -14,6 +14,9 @@
 - PR [#5](https://github.com/EzioAuditore95/fantamonitor/pull/5) integrata. CI sul commit
   `dd6eb05eae3412ab95ae611c2e98d1cfa02021c8`
   [riuscita](https://github.com/EzioAuditore95/fantamonitor/actions/runs/37617235776).
+- Registro operativo e timestamp migrazione aggiornati in `52268e4`: CI
+  [riuscita](https://github.com/EzioAuditore95/fantamonitor/actions/runs/37618656925),
+  deployment Vercel pronto.
 
 ## Servizi verificati
 

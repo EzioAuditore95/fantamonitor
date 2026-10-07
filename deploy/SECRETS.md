@@ -60,6 +60,9 @@ durante un rollback. Le migrazioni conservano esclusivamente digest SHA-256.
 - Non sono disponibili operazioni per ruotare/disabilitare le chiavi API privilegiate,
   ruotare JWT o cambiare la password database. Non leggere segreti dal catalogo Auth.
   Verificare le dipendenze dal pannello Supabase prima di disabilitare chiavi legacy.
+- Inventario pubblicabile verificato il 7 ottobre: la chiave anon legacy e la chiave
+  publishable `default` risultano entrambe attive. Questo inventario non certifica lo
+  stato delle chiavi privilegiate né della password database; nessuna legacy revocata.
 - Invalidare JWT/sessioni richiede una finestra concordata; non confondere la rimozione
   da Vercel con la revoca presso Supabase.
 
